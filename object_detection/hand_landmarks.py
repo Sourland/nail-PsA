@@ -4,7 +4,7 @@ from mediapipe.tasks.python import vision
 import cv2
 import numpy as np
 from draw_landmarks_on_image import draw_landmarks_on_image
-
+from segment_anything import sam_model_registry, SamAutomaticMaskGenerator
 
 def resize_image(img: np.ndarray, new_size: int) -> np.ndarray:
     """
@@ -70,7 +70,6 @@ def locate_hand_landmarks(image: np.ndarray, detector: vision.HandLandmarker) ->
     return detector.detect(mediapipe_image)
 
 
-
 img = cv2.imread('../hand3.jpg', cv2.IMREAD_UNCHANGED)
 resized_img = resize_image(img, 300)
 detector = load_hand_landmarker('../hand_landmarker.task')
@@ -79,5 +78,13 @@ annotated_image = draw_landmarks_on_image(
     mp.Image(image_format=mp.ImageFormat.SRGB, data=resized_img).numpy_view(),
     landmarks
 )
-cv2.imshow('image', annotated_image)
-cv2.waitKey(0)
+# cv2.imshow('image', annotated_image)
+# cv2.waitKey(0)
+
+sam = sam_model_registry["vit_h"](checkpoint="../sam_vit_h_4b8939.pth")
+predictor = SamAutomaticMaskGenerator(sam)
+masks = predictor.generate(resized_img)
+i = 0
+
+
+
