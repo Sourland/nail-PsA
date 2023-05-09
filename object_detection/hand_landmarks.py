@@ -1,3 +1,6 @@
+import pickle
+from collections import deque
+
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
@@ -5,6 +8,9 @@ import cv2
 import numpy as np
 from draw_landmarks_on_image import draw_landmarks_on_image
 from segment_anything import sam_model_registry, SamAutomaticMaskGenerator
+import matplotlib.pyplot as plt
+from pixel_finder import find_furthest_black_pixel
+
 
 def resize_image(img: np.ndarray, new_size: int) -> np.ndarray:
     """
@@ -70,8 +76,8 @@ def locate_hand_landmarks(image: np.ndarray, detector: vision.HandLandmarker) ->
     return detector.detect(mediapipe_image)
 
 
-img = cv2.imread('../hand3.jpg', cv2.IMREAD_UNCHANGED)
-resized_img = resize_image(img, 300)
+img = cv2.imread('../hand2.jpg', cv2.IMREAD_UNCHANGED)
+resized_img = resize_image(img, 720)
 detector = load_hand_landmarker('../hand_landmarker.task')
 landmarks = locate_hand_landmarks(resized_img, detector)
 annotated_image = draw_landmarks_on_image(
@@ -81,10 +87,53 @@ annotated_image = draw_landmarks_on_image(
 # cv2.imshow('image', annotated_image)
 # cv2.waitKey(0)
 
-sam = sam_model_registry["vit_h"](checkpoint="../sam_vit_h_4b8939.pth")
-predictor = SamAutomaticMaskGenerator(sam)
-masks = predictor.generate(resized_img)
-i = 0
+# sam = sam_model_registry["vit_h"](checkpoint="../sam_vit_h_4b8939.pth")
+# predictor = SamAutomaticMaskGenerator(sam)
+file = open('../masks2.p', 'rb')
+masks = pickle.load(file)
+segmented_image = resized_img.copy();;;
+segmented_image[~masks[0]["segmentation"], :] = [0, 0, 0]
+segmented_image[masks[0]["segmentation"], :] = [255, 255, 255]
+annotated_image = draw_landmarks_on_image(
+    mp.Image(image_format=mp.ImageFormat.SRGB, data=resized_img).numpy_view(),
+    landmarks
+)
+cv2.namedWindow("image", cv2.WINDOW_NORMAL)
+cv2.resizeWindow("image", 300, 700)
+#
+cv2.imshow('image', annotated_image)
+cv2.waitKey(0)
+
+# Load the segmented image and landmark coordinates
+segmented_image = cv2.cvtColor(segmented_image, cv2.COLOR_BGR2GRAY)
+(height, width) = segmented_image.shape
+landmark_x = round(height * landmarks.hand_landmarks[0][8].x)  # X coordinate of the Mediapipe landmark
+landmark_y = round(width * landmarks.hand_landmarks[0][8].y)  # Y coordinate of the Mediapipe landmark
+
+row_up = 0
+col_left = col_right = 0
+
+while segmented_image[landmark_x, landmark_y - row_up] != 0:
+    row_up += 1
+    break
+
+while segmented_image[landmark_x + col_right, landmark_y] != 0:
+    col_right += 1
+    break
+
+while segmented_image[landmark_x - col_right, landmark_y] != 0:
+    col_left += 1
+    break
 
 
+cv2.imshow('image', segmented_image)
+cv2.waitKey(0)
+rect_height = round(1.5*row_up)
+rect_width = col_right + col_left
+top_left = (landmark_x - rect_width // 2, landmark_y - rect_height // 2)
+bottom_right = (landmark_x + rect_width // 2, landmark_y + rect_height // 2)
 
+cv2.rectangle(resized_img, top_left, bottom_right, (0, 255, 0), thickness=2)
+
+cv2.imshow('image', resized_img)
+cv2.waitKey(0)

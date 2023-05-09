@@ -1,8 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import cv2
-
-
+from segment_anything import sam_model_registry, SamAutomaticMaskGenerator
+from hand_landmarks import resize_image
 def show_annotations(anns, axes=None):
     """
     Displays annotations on an axes.
@@ -144,3 +144,17 @@ def show_box(box, ax):
             lw=2
         )
     )
+
+img = cv2.imread('../hand2.jpg', cv2.IMREAD_UNCHANGED)
+resized_img = resize_image(img, 720)
+sam = sam_model_registry["vit_h"](checkpoint="../sam_vit_h_4b8939.pth")
+predictor = SamAutomaticMaskGenerator(sam)
+masks = predictor.generate(resized_img)
+resized_img[~masks[0]["segmentation"], :] = [0, 0, 0]
+resized_img[masks[0]["segmentation"], :] = [255, 255, 255]
+
+import pickle
+
+file = open('masks2.p', 'wb')
+pickle.dump(masks, file)
+file.close()
