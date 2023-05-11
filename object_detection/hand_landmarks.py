@@ -1,15 +1,14 @@
 import pickle
-from collections import deque
-
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 import cv2
 import numpy as np
 from draw_landmarks_on_image import draw_landmarks_on_image
-from segment_anything import sam_model_registry, SamAutomaticMaskGenerator
-import matplotlib.pyplot as plt
-from pixel_finder import find_furthest_black_pixel
+# from segment_anything import sam_model_registry, SamAutomaticMaskGenerator
+# import matplotlib.pyplot as plt
+from pixel_finder import find_bounding_box
+from landmarks import landmark_names
 
 
 def resize_image(img: np.ndarray, new_size: int) -> np.ndarray:
@@ -49,7 +48,7 @@ def load_hand_landmarker(path: str) -> vision.HandLandmarker:
     base_options = python.BaseOptions(model_asset_path=path)
 
     # Set options for the HandLandmarker object
-    options = vision.HandLandmarkerOptions(base_options=base_options, num_hands=1, min_hand_detection_confidence=0.13)
+    options = vision.HandLandmarkerOptions(base_options=base_options, num_hands=1, min_hand_detection_confidence=0.1)
 
     # Create and return the HandLandmarker object
     return vision.HandLandmarker.create_from_options(options)
@@ -70,70 +69,54 @@ def locate_hand_landmarks(image: np.ndarray, detector: vision.HandLandmarker) ->
         None
     """
     # Convert the input image to a mediapipe image
-    mediapipe_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image)
+    mediapipe_image = mp.Image.create_from_file(image)
 
     # Use the HandLandmarker object to detect hand landmarks in the mediapipe image
     return detector.detect(mediapipe_image)
 
 
-img = cv2.imread('../hand2.jpg', cv2.IMREAD_UNCHANGED)
-resized_img = resize_image(img, 720)
+img = cv2.imread('../hand7.jpg', cv2.IMREAD_UNCHANGED)
+# resized_img = resize_image(img, 720)
 detector = load_hand_landmarker('../hand_landmarker.task')
-landmarks = locate_hand_landmarks(resized_img, detector)
+landmarks = locate_hand_landmarks('../hand7.jpg', detector)
 annotated_image = draw_landmarks_on_image(
-    mp.Image(image_format=mp.ImageFormat.SRGB, data=resized_img).numpy_view(),
+    mp.Image(image_format=mp.ImageFormat.SRGB, data=img).numpy_view(),
     landmarks
 )
-# cv2.imshow('image', annotated_image)
-# cv2.waitKey(0)
 
-# sam = sam_model_registry["vit_h"](checkpoint="../sam_vit_h_4b8939.pth")
-# predictor = SamAutomaticMaskGenerator(sam)
-file = open('../masks2.p', 'rb')
+
+file = open('../masks7.p', 'rb')
 masks = pickle.load(file)
-segmented_image = resized_img.copy();;;
+segmented_image = img.copy()
 segmented_image[~masks[0]["segmentation"], :] = [0, 0, 0]
 segmented_image[masks[0]["segmentation"], :] = [255, 255, 255]
-annotated_image = draw_landmarks_on_image(
-    mp.Image(image_format=mp.ImageFormat.SRGB, data=resized_img).numpy_view(),
-    landmarks
-)
-cv2.namedWindow("image", cv2.WINDOW_NORMAL)
-cv2.resizeWindow("image", 300, 700)
-#
-cv2.imshow('image', annotated_image)
-cv2.waitKey(0)
+
+# cv2.imshow('image', segmented_image)
+# cv2.waitKey(0)
 
 # Load the segmented image and landmark coordinates
+landmarks = landmarks.hand_landmarks[0]
 segmented_image = cv2.cvtColor(segmented_image, cv2.COLOR_BGR2GRAY)
 (height, width) = segmented_image.shape
-landmark_x = round(height * landmarks.hand_landmarks[0][8].x)  # X coordinate of the Mediapipe landmark
-landmark_y = round(width * landmarks.hand_landmarks[0][8].y)  # Y coordinate of the Mediapipe landmark
+landmark_x = round(width * landmarks[landmark_names.INDEX_FINGER_TIP].x)  # X coordinate of the Mediapipe landmark # col
+landmark_y = round(
+    height * landmarks[landmark_names.INDEX_FINGER_TIP].y)  # Y coordinate of the Mediapipe landmark # row
 
-row_up = 0
-col_left = col_right = 0
-
-while segmented_image[landmark_x, landmark_y - row_up] != 0:
-    row_up += 1
-    break
-
-while segmented_image[landmark_x + col_right, landmark_y] != 0:
-    col_right += 1
-    break
-
-while segmented_image[landmark_x - col_right, landmark_y] != 0:
-    col_left += 1
-    break
-
-
-cv2.imshow('image', segmented_image)
-cv2.waitKey(0)
-rect_height = round(1.5*row_up)
-rect_width = col_right + col_left
+above, left, right = find_bounding_box(segmented_image, (landmark_x, landmark_y))
+print(above, left, right)
+# cv2.imshow('image', segmented_image)
+# cv2.waitKey(0)
+rect_height = round(2.5 * above)
+rect_width = left + right
 top_left = (landmark_x - rect_width // 2, landmark_y - rect_height // 2)
 bottom_right = (landmark_x + rect_width // 2, landmark_y + rect_height // 2)
 
-cv2.rectangle(resized_img, top_left, bottom_right, (0, 255, 0), thickness=2)
+# cv2.rectangle(resized_img, top_left, bottom_right, (0, 255, 0), thickness=2)
 
-cv2.imshow('image', resized_img)
-cv2.waitKey(0)
+# cv2.imshow('image', resized_img)
+# cv2.waitKey(0)
+x = top_left[0]
+y = top_left[1]
+extracted_image = img[y:y + rect_height, x:x + rect_width, :]
+print(extracted_image.shape)
+cv2.imwrite("../nail.jpg", extracted_image)

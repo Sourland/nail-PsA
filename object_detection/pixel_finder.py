@@ -2,34 +2,40 @@ import cv2
 import numpy as np
 
 
-def find_furthest_black_pixel(landmark, segmented_image):
-    # Find the contour of the hand object in the segmented image
-    contours, _ = cv2.findContours(segmented_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+def find_bounding_box(image, landmark):
+    def find_nearest_black_pixel_above(image, landmark):
+        x, y = landmark
 
-    if len(contours) == 0:
+        # Iterate from the landmark's y-coordinate towards the top of the image
+        for i in range(y, -1, -1):
+            if image[i, x] == 0:
+                return np.abs(y - i)  # Return the coordinates of the nearest black pixel
+
         return None
 
-    # Get the first (largest) contour
-    contour = max(contours, key=cv2.contourArea)
+    def find_nearest_black_pixel_left(image, landmark):
+        x, y = landmark
 
-    furthest_distance = 0
-    furthest_point = None
+        # Iterate from the landmark's x-coordinate towards the left of the image
+        for i in range(x, -1, -1):
+            if image[y, i] == 0:
+                return np.abs(x - i)  # Return the coordinates of the nearest black pixel
 
-    # Iterate over each point in the contour
-    for point in contour[:, 0, :]:
-        x, y = point
+        return None  # If no black pixel is found to the left of the landmark
 
-        # Calculate the distance between the landmark and the contour point
-        distance = np.linalg.norm(landmark - (x, y))
+    def find_nearest_black_pixel_right(image, landmark):
+        x, y = landmark
+        image_width = image.shape[1]
 
-        if distance > furthest_distance:
-            furthest_distance = distance
-            furthest_point = (x, y)
+        # Iterate from the landmark's x-coordinate towards the right of the image
+        for i in range(x, image_width):
+            if image[y, i] == 0:
+                return np.abs(x - i)  # Return the coordinates of the nearest black pixel
 
-    if furthest_point is not None:
-        # Get the corresponding black pixel coordinates
-        furthest_black_pixel = furthest_point
-        return furthest_black_pixel
+        return None  # If no black pixel is found to the right of the landmark
 
-    return None
+    above = find_nearest_black_pixel_above(image, landmark)
+    left = find_nearest_black_pixel_left(image, landmark)
+    right = find_nearest_black_pixel_right(image, landmark)
 
+    return above, left, right
