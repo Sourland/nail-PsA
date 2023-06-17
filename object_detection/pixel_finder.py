@@ -1,11 +1,18 @@
 import cv2
 import numpy as np
+from landmarks_constants import joint_neighbours_left_hand, joint_neighbours_right_hand
 
 
-def find_bounding_box(image, landmarks):
+def find_bounding_box(image, landmarks, which_hand):
+    assert which_hand in ["Right", "Left"]
     x, y = landmarks
     height, width = image.shape
     left = right = 0
+
+    if which_hand == "Right":
+        neighbours = joint_neighbours_right_hand
+    else:
+        neighbours = joint_neighbours_left_hand
 
     # Iterate from the landmark's x-coordinate towards the left of the image
     for i in range(x, -1, -1):
@@ -26,7 +33,11 @@ def find_bounding_box(image, landmarks):
     return top_left, bottom_right
 
 
-def check_traveling_boundaries(image, landmarks, landmark):
+def has_overstepped_boundaries(index, landmarks, neighbours):
+    ...
+
+
+def left_or_right_hand(landmarks):
     ...
 
 

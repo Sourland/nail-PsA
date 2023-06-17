@@ -5,7 +5,7 @@ from draw_landmarks_on_image import draw_landmarks_on_image
 # from segment_anything import sam_model_registry, SamAutomaticMaskGenerator
 # import matplotlib.pyplot as plt
 from pixel_finder import find_bounding_box, crop_image
-from landmarks import landmark_names
+from landmarks_constants import *
 
 
 
@@ -15,6 +15,7 @@ Open Image and extract landmarks
 img = cv2.imread('../hand7.jpg', cv2.IMREAD_UNCHANGED)
 detector = load_hand_landmarker('../hand_landmarker.task')
 landmarks = locate_hand_landmarks('../hand7.jpg', detector)
+which_hand = landmarks.handedness[0][0].category_name
 annotated_image = draw_landmarks_on_image(
     mp.Image(image_format=mp.ImageFormat.SRGB, data=img).numpy_view(),
     landmarks
@@ -41,15 +42,15 @@ cv2.waitKey(0)
 Mediapipe landmarks are normalized in [0,1]. Use width and height to extract the landmark position in pixel coordinates
 """
 (height, width) = segmented_image.shape
-landmark_x = round(width * landmarks[landmark_names.MIDDLE_FINGER_TIP].x)  # X coordinate of the Mediapipe landmark # col
-landmark_y = round(height * landmarks[landmark_names.MIDDLE_FINGER_TIP].y)  # Y coordinate of the Mediapipe landmark # row
+landmark_x = round(width * landmarks[MIDDLE_FINGER_TIP].x)  # X coordinate of the Mediapipe landmark # col
+landmark_y = round(height * landmarks[MIDDLE_FINGER_TIP].y)  # Y coordinate of the Mediapipe landmark # row
 
 """
 From the landmark 
 """
-top_left, bottom_right = find_bounding_box(segmented_image, (landmark_x, landmark_y))
+top_left, bottom_right = find_bounding_box(segmented_image, (landmark_x, landmark_y), which_hand)
 extracted_image = crop_image(img, top_left, bottom_right)
-cv2.rectangle(img, top_left, bottom_right, (0, 255, 0), thickness=2)
+# cv2.rectangle(img, top_left, bottom_right, (0, 255, 0), thickness=2)
 cv2.imshow('image', img)
 cv2.waitKey(0)
 cv2.imwrite("../nail.jpg", extracted_image)
