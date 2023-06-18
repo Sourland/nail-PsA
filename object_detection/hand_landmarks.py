@@ -12,45 +12,51 @@ from landmarks_constants import *
 """
 Open Image and extract landmarks
 """
-img = cv2.imread('../hand7.jpg', cv2.IMREAD_UNCHANGED)
+img = cv2.imread('../hand4.jpg', cv2.IMREAD_UNCHANGED)
 detector = load_hand_landmarker('../hand_landmarker.task')
-landmarks = locate_hand_landmarks('../hand7.jpg', detector)
+landmarks = locate_hand_landmarks('../hand4.jpg', detector)
 which_hand = landmarks.handedness[0][0].category_name
 annotated_image = draw_landmarks_on_image(
     mp.Image(image_format=mp.ImageFormat.SRGB, data=img).numpy_view(),
     landmarks
 )
-cv2.namedWindow("image", cv2.WINDOW_NORMAL)
-cv2.resizeWindow("image", 300, 700)
+# cv2.namedWindow("image", cv2.WINDOW_NORMAL)
+# cv2.resizeWindow("image", 300, 700)
 #
-cv2.imshow('image', annotated_image)
-cv2.waitKey(0)
+# cv2.imshow('image', annotated_image)
+# cv2.waitKey(0)
 landmarks = landmarks.hand_landmarks[0]
 """
 Segment Image and extract segmentation mask as a binary image
 """
-file = open('../masks7.p', 'rb')
+file = open('../masks4.p', 'rb')
 masks = pickle.load(file)
 segmented_image = img.copy()
 segmented_image[~masks[0]["segmentation"], :] = [0, 0, 0]
 segmented_image[masks[0]["segmentation"], :] = [255, 255, 255]
 segmented_image = cv2.cvtColor(segmented_image, cv2.COLOR_BGR2GRAY)
-cv2.imshow('image', segmented_image)
-cv2.waitKey(0)
+# cv2.imshow('image', segmented_image)
+# cv2.waitKey(0)
 # Load the segmented image and landmark coordinates
 """
 Mediapipe landmarks are normalized in [0,1]. Use width and height to extract the landmark position in pixel coordinates
 """
-(height, width) = segmented_image.shape
-landmark_x = round(width * landmarks[MIDDLE_FINGER_TIP].x)  # X coordinate of the Mediapipe landmark # col
-landmark_y = round(height * landmarks[MIDDLE_FINGER_TIP].y)  # Y coordinate of the Mediapipe landmark # row
+
 
 """
 From the landmark 
 """
-top_left, bottom_right = find_bounding_box(segmented_image, (landmark_x, landmark_y), which_hand)
-extracted_image = crop_image(img, top_left, bottom_right)
+
+for area in areas_of_interest:
+    top_left, bottom_right = find_bounding_box(segmented_image, landmarks, area, which_hand)
+    extracted_image = crop_image(img, top_left, bottom_right)
+    extracted_image = resize_image(extracted_image, 144)
+    cv2.imwrite(f"../results/area{area}.jpg", extracted_image)
+
+
+# top_left, bottom_right = find_bounding_box(segmented_image, landmarks, PINKY_TIP, which_hand)
+# extracted_image = crop_image(img, top_left, bottom_right)
 # cv2.rectangle(img, top_left, bottom_right, (0, 255, 0), thickness=2)
-cv2.imshow('image', img)
-cv2.waitKey(0)
-cv2.imwrite("../nail.jpg", extracted_image)
+# cv2.imshow('image', img)
+# cv2.waitKey(0)
+# cv2.imwrite("../nail.jpg", extracted_image)
