@@ -1,9 +1,6 @@
 import pickle
 from utils import *
 import cv2
-from draw_landmarks_on_image import draw_landmarks_on_image
-# from segment_anything import sam_model_registry, SamAutomaticMaskGenerator
-# import matplotlib.pyplot as plt
 from pixel_finder import find_bounding_box, crop_image
 from landmarks_constants import *
 
@@ -12,9 +9,9 @@ from landmarks_constants import *
 """
 Open Image and extract landmarks
 """
-img = cv2.imread('../hand4.jpg', cv2.IMREAD_UNCHANGED)
+img = cv2.imread('../hands/hand4.jpg', cv2.IMREAD_UNCHANGED)
 detector = load_hand_landmarker('../hand_landmarker.task')
-landmarks = locate_hand_landmarks('../hand4.jpg', detector)
+landmarks = locate_hand_landmarks('../hands/hand4.jpg', detector)
 which_hand = landmarks.handedness[0][0].category_name
 annotated_image = draw_landmarks_on_image(
     mp.Image(image_format=mp.ImageFormat.SRGB, data=img).numpy_view(),
@@ -29,7 +26,7 @@ landmarks = landmarks.hand_landmarks[0]
 """
 Segment Image and extract segmentation mask as a binary image
 """
-file = open('../masks4.p', 'rb')
+file = open('../hands/masks4.p', 'rb')
 masks = pickle.load(file)
 segmented_image = img.copy()
 segmented_image[~masks[0]["segmentation"], :] = [0, 0, 0]
@@ -50,7 +47,7 @@ From the landmark
 for area in areas_of_interest:
     top_left, bottom_right = find_bounding_box(segmented_image, landmarks, area, which_hand)
     extracted_image = crop_image(img, top_left, bottom_right)
-    extracted_image = resize_image(extracted_image, 144)
+    extracted_image = resize_image(extracted_image, 244)
     cv2.imwrite(f"../results/area{area}.jpg", extracted_image)
 
 
