@@ -13,7 +13,7 @@ HANDEDNESS_TEXT_COLOR = (88, 205, 54)  # vibrant green
 
 
 class HandRegionExtractor:
-    def __int__(self, landmark_detector, hand_extractor):
+    def __init__(self, landmark_detector, hand_extractor):
         ...
 
 
