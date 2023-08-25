@@ -69,3 +69,4 @@ def crop_image(image, top_left, bottom_right):
     x_bottom_right, y_bottom_right = bottom_right
 
     return image[y_top_left:y_bottom_right, x_top_left:x_bottom_right]
+
