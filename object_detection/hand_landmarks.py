@@ -9,7 +9,7 @@ from mediapipe.tasks.python import vision
 
 BG_COLOR = (0, 0, 0)  # gray
 MASK_COLOR = (255, 255, 255)  # white
-HAND_PATH = '../hands/hand4.jpg'
+HAND_PATH = '../hands/hand1.jpg'
 
 img = cv2.imread(HAND_PATH, cv2.IMREAD_UNCHANGED)
 detector = load_hand_landmarker('../hand_landmarker.task')
@@ -39,25 +39,29 @@ def resize_and_show(image):
 
 # Create the options that will be used for ImageSegmenter
 base_options = python.BaseOptions(model_asset_path='../selfie_multiclass_256x256.tflite')
-options = vision.ImageSegmenterOptions(base_options=base_options)
-
+options = vision.ImageSegmenterOptions(
+    base_options=base_options  # Locale to use for segment display names (assuming English US here)
+)
 # Create the image segmenter
 with vision.ImageSegmenter.create_from_options(options) as segmenter:
-    # Loop through demo image(s):
     # Create the MediaPipe image file that will be segmented
     image = mp.Image.create_from_file(HAND_PATH)
 
     # Retrieve the masks for the segmented image
-    segmentation_result = segmenter.segment(image)[0].numpy_view()
+    segmentation_result = segmenter.segment(image)
+    segmentation_mask = segmentation_result[0].numpy_view()
 
-    # Generate solid color images for showing the output segmentation mask.
+    # Thresholding the mask
+    thresholded_mask = np.where(segmentation_mask > 0.1, 1, 0)
+
+    # Generate solid color images for showing the output segmentation mask
     image_data = image.numpy_view()
     fg_image = np.zeros(image_data.shape, dtype=np.uint8)
     fg_image[:] = MASK_COLOR
     bg_image = np.zeros(image_data.shape, dtype=np.uint8)
     bg_image[:] = BG_COLOR
 
-    condition = np.stack((segmentation_result,) * 3, axis=-1) > 0.2
+    condition = np.stack((thresholded_mask,) * 3, axis=-1)
     output_image = np.where(condition, fg_image, bg_image)
 
     annotated_image = draw_landmarks_on_image(
@@ -65,7 +69,6 @@ with vision.ImageSegmenter.create_from_options(options) as segmenter:
         landmarks
     )
     cv2.imwrite('../landmarksHandMask.jpg', annotated_image)
-
 
     resize_and_show(output_image)
 
@@ -80,11 +83,11 @@ From the landmark
 """
 
 for area in areas_of_interest:
-    top_left, bottom_right = find_bounding_box(segmentation_result, landmarks, area, which_hand)
+    top_left, bottom_right = find_bounding_box(thresholded_mask, landmarks, area, which_hand)
     extracted_image = crop_image(img, top_left, bottom_right)
     extracted_image = resize_image(extracted_image, 244)
     cv2.imwrite(f"../results/area{area}.jpg", extracted_image)
-    cv2.rectangle(img, top_left, bottom_right, (255, 0, 0), thickness=3)
+    # cv2.rectangle(img, top_left, bottom_right, (255, 0, 0), thickness=3)
     cv2.imwrite("../boxes.jpg", img)
 
 
