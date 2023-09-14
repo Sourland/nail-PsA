@@ -12,11 +12,6 @@ FONT_THICKNESS = 1
 HANDEDNESS_TEXT_COLOR = (88, 205, 54)  # vibrant green
 
 
-class HandRegionExtractor:
-    def __init__(self, landmark_detector, hand_extractor):
-        ...
-
-
 def resize_image(img: np.ndarray, new_size: int) -> np.ndarray:
     """
     Resizes the image by resizing the smaller axis to the desired size in order to maintain aspect ratio.

@@ -8,21 +8,46 @@ from utils import draw_landmarks_on_image
 landmarks_components = landmarks.hand_landmarks[0]
 
 
-def landmarks_to_pixel_coordinates(image_path):
+def landmarks_to_pixel_coordinates(image_path: str) -> tuple[list, np.ndarray]:
+    """
+       Converts landmarks to pixel coordinates based on the given image path.
+
+       Args:
+           image_path (str): Path to the image file.
+
+       Returns:
+           tuple[list, np.ndarray]: A tuple containing landmarks in pixel format and the read image.
+   """
     output_image = cv2.imread(image_path)
     landmarks_pixel = [landmark_to_pixels(cv2.cvtColor(output_image, cv2.COLOR_BGR2GRAY), landmarks_components, idx)
                        for idx, landmark in enumerate(landmarks_components)]
     return landmarks_pixel, output_image
 
 
-def extract_contour(image):
+def extract_contour(image: np.ndarray) -> np.ndarray:
+    """
+    Extract the largest contour from the given image.
+
+    Args:
+        image (np.ndarray): The image from which to extract the contour.
+
+    Returns:
+        np.ndarray: The largest contour found in the image.
+    """
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     _, thresholded = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
     contours, _ = cv2.findContours(thresholded, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     return max(contours, key=cv2.contourArea)
 
 
-def plot_contour(image, contour):
+def plot_contour(image: np.ndarray, contour: np.ndarray) -> None:
+    """
+    Plots the given contour on the provided image.
+
+    Args:
+        image (np.ndarray): The image on which to plot the contour.
+        contour (np.ndarray): The contour to plot on the image.
+    """
     # Copy the image to avoid modifying the original
     image_copy = image.copy()
     # Draw the contour on the copied image
@@ -33,7 +58,19 @@ def plot_contour(image, contour):
     cv2.destroyAllWindows()
 
 
-def get_joint_thickness_euclidian(image_contour, landmark_point):
+def get_joint_thickness_euclidian(image_contour: np.ndarray, landmark_point: list[int]) \
+        -> tuple[np.ndarray, np.ndarray, float]:
+    """
+    Calculates the joint thickness based on the euclidian distance between the closest points
+    in the contour to the given landmark point.
+
+    Args:
+        image_contour (np.ndarray): The contour of the image.
+        landmark_point (list[int]): The pixel coordinates of the landmark point.
+
+    Returns:
+        tuple[np.ndarray, np.ndarray, float]: The leftmost and rightmost closest points and their distance (thickness).
+    """
     point = np.array(landmark_point)
     left_contour = image_contour[image_contour[:, 0, 0] < point[0]]
     right_contour = image_contour[image_contour[:, 0, 0] > point[0]]
@@ -47,7 +84,16 @@ def get_joint_thickness_euclidian(image_contour, landmark_point):
     return closest_left, closest_right, thickness
 
 
-def get_mean_pip_dip_distance(landmarks):
+def get_mean_pip_dip_distance(landmarks: list[list[int]]) -> float:
+    """
+     Calculates the mean distance between PIP and DIP landmarks.
+
+     Args:
+         landmarks (list[list[int]]): A list of landmarks pixel coordinates.
+
+     Returns:
+         float: The mean PIP-DIP distance.
+     """
     landmarks = np.array(landmarks)
     distances = [
         np.linalg.norm(landmarks[INDEX_FINGER_PIP] - landmarks[INDEX_FINGER_DIP]),
@@ -58,7 +104,17 @@ def get_mean_pip_dip_distance(landmarks):
     return np.mean(distances)
 
 
-def process_landmarks(image_contour, landmarks_pixel):
+def process_landmarks(image_contour: np.ndarray, landmarks_pixel: list[list[int]]) -> dict[str, dict[str, any]]:
+    """
+    Processes the landmarks to retrieve the closest contour points and their thickness.
+
+    Args:
+        image_contour (np.ndarray): The contour of the image.
+        landmarks_pixel (list[list[int]]): List of landmark pixel coordinates.
+
+    Returns:
+        dict[str, dict[str, any]]: Processed landmarks information including id, thickness, and closest contour points.
+    """
     landmarks_to_process = {
         "INDEX_FINGER_PIP": 6,
         "INDEX_FINGER_DIP": 7,
@@ -82,7 +138,18 @@ def process_landmarks(image_contour, landmarks_pixel):
     return results
 
 
-def draw_closest_points(image, landmark_point, contour):
+def draw_closest_points(image: np.ndarray, landmark_point: tuple, contour: np.ndarray) -> np.ndarray:
+    """
+    Draw the closest points of the contour to the landmark on the image.
+
+    Args:
+        image (np.ndarray): The image to be modified.
+        landmark_point (tuple): The coordinates of the landmark point.
+        contour (np.ndarray): The contour of the image.
+
+    Returns:
+        np.ndarray: The modified image with the closest points drawn.
+    """
     point = np.array(landmark_point)
 
     left_contour = contour[contour[:, 0, 0] < point[0]]

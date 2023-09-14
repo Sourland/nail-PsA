@@ -10,7 +10,7 @@ from pixel_finder import find_bounding_box, crop_image
 
 BG_COLOR = (0, 0, 0)  # gray
 MASK_COLOR = (255, 255, 255)  # white
-HAND_PATH = '../hands/hand1.jpg'
+HAND_PATH = '../hands/hand_swolo2.png'
 DESIRED_HEIGHT = 480
 DESIRED_WIDTH = 480
 
