@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "nail-psoriasis-detection"
+version = "0.1.0"
+description = ""
+authors = ["sourland <jem2010@windowslive.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+opencv-contrib-python="4.7.0.72"
+mediapipe="0.9.3.0"
+numpy="1.23.5"
+torch="2.0.0"
+torchvision="0.15.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
