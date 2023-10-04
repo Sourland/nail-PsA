@@ -6,12 +6,14 @@ authors = ["sourland <jem2010@windowslive.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = ">=3.11,<3.13"
 opencv-contrib-python="4.7.0.72"
-mediapipe="0.9.3.0"
 numpy="1.23.5"
 torch="2.0.0"
 torchvision="0.15.1"
+mediapipe = "^0.10.5"
+pytorch-lightning = "^2.0.9.post0"
+scipy = "^1.11.3"
 
 [build-system]
 requires = ["poetry-core"]
