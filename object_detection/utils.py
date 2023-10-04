@@ -51,7 +51,8 @@ def load_hand_landmarker(path: str) -> vision.HandLandmarker:
     base_options = python.BaseOptions(model_asset_path=path)
 
     # Set options for the HandLandmarker object
-    options = vision.HandLandmarkerOptions(base_options=base_options, num_hands=1, min_hand_detection_confidence=0.1)
+    options = vision.HandLandmarkerOptions(base_options=base_options, num_hands=1, min_hand_detection_confidence=0.1,
+                                           min_hand_presence_confidence=0.1)
 
     # Create and return the HandLandmarker object
     return vision.HandLandmarker.create_from_options(options)
