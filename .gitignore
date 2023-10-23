@@ -1,4 +1,5 @@
 dataset
+results
 *.pdf
 .idea
 __pycache__
