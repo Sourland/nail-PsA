@@ -1,15 +1,19 @@
+import io
+import json
 import os
-
-import cv2
 import math
+import pickle
+import warnings
+
+from PIL.Image import Image
+from rembg import remove, new_session
 from utils import *
 from landmarks_constants import *
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 from pixel_finder import find_bounding_box, crop_image
 
-# from joint_thickness import get_finger_vectors
-
+my_session = new_session("u2net_human_seg")
 
 
 def load_and_annotate_image(hand_path, detector_path):
@@ -34,14 +38,25 @@ def resize_and_show(image, result_path):
     return img
 
 
-def segment_image(image, model_path):
-    base_options = python.BaseOptions(model_asset_path=model_path)
-    options = vision.ImageSegmenterOptions(base_options=base_options,
-                                           output_confidence_masks=True)
-    with vision.ImageSegmenter.create_from_options(options) as segmenter:
-        segmentation_result = segmenter.segment(image)
-        segmentation_mask = segmentation_result.confidence_masks[SKIN_CLASS].numpy_view()
-    return segmentation_mask
+def remove_bg_and_whiten(image_path):
+    # 1. Open the RGBA image using OpenCV
+    img = cv2.imread(image_path, cv2.COLOR_BGR2RGB)  # Read with alpha channel
+    img_ycrcb = cv2.cvtColor(img, cv2.COLOR_RGB2YCrCb)
+    img_ycrcb[:, :, 0] = cv2.equalizeHist(img_ycrcb[:, :, 0])
+    equalized_img = cv2.cvtColor(img_ycrcb, cv2.COLOR_YCrCb2RGB)
+
+    # 2. Remove image background (assuming you've a function 'remove_background' to do this)
+    img_without_bg = remove(equalized_img, session=my_session)
+    if img_without_bg.shape[2] == 4:
+        img_without_bg = img_without_bg[:, :, :3]
+    # 3. Iterate through each pixel in the image, and if it's not black, turn it white
+    mask = np.all(img_without_bg != [0, 0, 0], axis=-1)
+
+    output_image = img_without_bg.copy()
+    # output_image[mask] = [255, 255, 255]
+
+    # 4. Return the modified MxNx3 image
+    return output_image, mask
 
 
 def process_mask(segmentation_mask, image_data):
@@ -60,6 +75,11 @@ def extract_regions(img, thresholded_mask, landmarks, original_filename, which_h
     landmarks = landmarks.hand_landmarks[0]
     for idx, area in enumerate(areas_of_interest):
         top_left, bottom_right = find_bounding_box(thresholded_mask, landmarks, area, which_hand)
+        if top_left[0] == bottom_right[0] or top_left[1] == bottom_right[1]:
+            return
+
+        if original_filename == "hand75.jpg":
+            lol = 1
         extracted_image = crop_image(img, top_left, bottom_right)
         extracted_image = resize_image(extracted_image, 244)
 
@@ -69,7 +89,6 @@ def extract_regions(img, thresholded_mask, landmarks, original_filename, which_h
 
 
 def preprocess_image(image):
-
     image = cv2.bilateralFilter(image, d=9, sigmaColor=75, sigmaSpace=75)
 
     # Histogram Equalization
@@ -83,6 +102,18 @@ def preprocess_image(image):
     image = image.astype(np.float32) / 255.0
 
     return image
+
+
+def save_landmarks(landmarks, save_path):
+    """
+    Save HandLandmarkResult to a pickle file.
+
+    Parameters:
+        landmarks: HandLandmarkResult, containing landmark points data
+        save_path: str, path to where the pickle file will be saved
+    """
+    with open(save_path, 'wb') as f:
+        pickle.dump(landmarks, f)
 
 
 BG_COLOR = (0, 0, 0)  # gray
@@ -104,18 +135,17 @@ for image_filename in image_filenames:
 
     # Execute your code
     image, landmarks = load_and_annotate_image(HAND_PATH, '../hand_landmarker.task')
-    image = preprocess_image(image)
-    if image_filename == 'hand19.png':
-        image = image[:, :, :3]
+    # image = preprocess_image(image)
     if not landmarks.hand_landmarks:
+        wstr = f"HANDMARKS NOT LOCATED FOR IMAGE " + image_filename
+        warnings.warn(wstr)
         continue
 
     which_hand = landmarks.handedness[0][0].category_name
 
     mp_image = mp.Image.create_from_file(HAND_PATH)
-    segmentation_mask = segment_image(mp_image, '../selfie_multiclass_256x256.tflite')
-    # Resize
-    output_image, thresholded_mask = process_mask(segmentation_mask, image)
+    output_image, thresholded_mask = remove_bg_and_whiten(HAND_PATH)
+    # output_image, thresholded_mask = process_mask(segmentation_mask, image)
 
     annotated_image = draw_landmarks_on_image(
         mp.Image(image_format=mp.ImageFormat.SRGB, data=output_image).numpy_view(),
@@ -126,4 +156,7 @@ for image_filename in image_filenames:
     result_path = os.path.join('../results/SegMasks', f'segmask_{image_filename}')
 
     resize_and_show(output_image, result_path)
-    # extract_regions(image, thresholded_mask, landmarks, image_filename, which_hand)
+
+    save_landmarks(landmarks, f'../results/Landmarks/landmarks_{image_filename[:5]}.pkl')
+
+    extract_regions(image, thresholded_mask, landmarks, image_filename, which_hand)

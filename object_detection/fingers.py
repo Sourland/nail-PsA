@@ -1,7 +1,9 @@
+import json
+import pickle
+
 import numpy as np
 from numpy import ndarray
 
-from hand_landmarks import landmarks
 from pixel_finder import landmark_to_pixels
 from landmarks_constants import *
 from utils import draw_landmarks_on_image
@@ -211,8 +213,24 @@ def transform_landmarks(landmarks, rotation_matrix, roi_origin):
     return np.array(transformed_landmarks)
 
 
+def load_landmarks(load_path):
+    """
+    Load HandLandmarkResult from a pickle file.
+
+    Parameters:
+        load_path: str, path to the pickle file
+
+    Returns:
+        HandLandmarkResult: The loaded landmark instance
+    """
+    with open(load_path, 'rb') as f:
+        landmarks = pickle.load(f)
+    return landmarks
+
+
 if __name__ == "__main__":
-    landmarks_pixel, mask = landmarks_to_pixel_coordinates('../seg_mask.jpg')
+    landmarks = load_landmarks("../results/Landmarks/landmarks_hand4.pkl")
+    landmarks_pixel, mask = landmarks_to_pixel_coordinates('../results/SegMasks/segmask_hand4.jpg')
     image_contour = extract_contour(mask)
     plot_contour(mask, image_contour)
 

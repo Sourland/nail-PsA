@@ -18,15 +18,25 @@ def find_bounding_box(image, landmarks, landmark_name, which_hand):
 
     # Iterate from the landmark's x-coordinate towards the left of the image
     for i in range(x, -1, -1):
+        if i < 0 or i >= width or y < 0 or y >= height:
+            # Skip this iteration if index out of bounds
+            continue
+
         if image[y, i] == 0:
             left = np.abs(x - i)  # Return the coordinates of the nearest black pixel
             break
 
     # Iterate from the landmark's x-coordinate towards the right of the image
     for i in range(x, width):
+        if i < 0 or i >= width or y < 0 or y >= height:
+            # Skip this iteration if index out of bounds
+            continue
+
         if image[y, i] == 0:
             right = np.abs(x - i)  # Return the coordinates of the nearest black pixel
             break
+
+
     left, right = has_overstepped_boundaries(left, right, landmarks, neighbours, x, image)
     rect_width = rect_height = left + right
     top_left = (np.clip(x - rect_width // 2, 0, width), np.clip(y - rect_height // 2, 0, height))
