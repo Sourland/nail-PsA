@@ -1,34 +1,40 @@
 import json
 import pickle
 
+import cv2
 import numpy as np
 from numpy import ndarray
-
+import mediapipe as mp
 from pixel_finder import landmark_to_pixels
 from landmarks_constants import *
-from utils import draw_landmarks_on_image
+from utils import draw_landmarks_on_image, load_hand_landmarker, locate_hand_landmarks
 
 # Update the LANDMARKS_TO_PROCESS dictionary
 LANDMARKS_TO_PROCESS = {
-    "INDEX_FINGER_MCP": INDEX_FINGER_MCP,
-    "INDEX_FINGER_PIP": INDEX_FINGER_PIP,
-    "INDEX_FINGER_DIP": INDEX_FINGER_DIP,
-    "INDEX_FINGER_TIP": INDEX_FINGER_TIP,
-
-    "MIDDLE_FINGER_MCP": MIDDLE_FINGER_MCP,
-    "MIDDLE_FINGER_PIP": MIDDLE_FINGER_PIP,
-    "MIDDLE_FINGER_DIP": MIDDLE_FINGER_DIP,
-    "MIDDLE_FINGER_TIP": MIDDLE_FINGER_TIP,
-
-    "RING_FINGER_MCP": RING_FINGER_MCP,
-    "RING_FINGER_PIP": RING_FINGER_PIP,
-    "RING_FINGER_DIP": RING_FINGER_DIP,
-    "RING_FINGER_TIP": RING_FINGER_TIP,
-
-    "PINKY_MCP": PINKY_MCP,
-    "PINKY_PIP": PINKY_PIP,
-    "PINKY_DIP": PINKY_DIP,
-    "PINKY_TIP": PINKY_TIP
+    "INDEX": {
+        "MCP": INDEX_FINGER_MCP,
+        "PIP": INDEX_FINGER_PIP,
+        "DIP": INDEX_FINGER_DIP,
+        "TIP": INDEX_FINGER_TIP,
+    },
+    "MIDDLE": {
+        "MCP": MIDDLE_FINGER_MCP,
+        "PIP": MIDDLE_FINGER_PIP,
+        "DIP": MIDDLE_FINGER_DIP,
+        "TIP": MIDDLE_FINGER_TIP,
+    },
+    "RING": {
+        "MCP": RING_FINGER_MCP,
+        "PIP": RING_FINGER_PIP,
+        "DIP": RING_FINGER_DIP,
+        "TIP": RING_FINGER_TIP,
+    },
+    "PINKY": {
+        "MCP": PINKY_MCP,
+        "PIP": PINKY_PIP,
+        "DIP": PINKY_DIP,
+        "TIP": PINKY_TIP,
+    },
 }
 
 
@@ -123,11 +129,11 @@ def draw_bounding_box(image: np.ndarray, points: list[np.ndarray]) -> tuple[np.n
     box = cv2.boxPoints(((center[0], center[1]), (width, height), theta)).astype(int)
 
     # Draw the rotated bounding box on the image
-    cv2.polylines(image, [box], isClosed=True, color=(0, 255, 0), thickness=2)
+    cv2.polylines(image, [box], isClosed=True, color=(0, 255, 0), thickness=1)
     return (center, (width, height), theta)
 
 
-def extract_roi(image, rect):
+def extract_roi(image, rect, rotation=False):
     """
     Extracts and returns the region of interest inside the rectangle.
 
@@ -149,14 +155,11 @@ def extract_roi(image, rect):
     warped_image = cv2.warpAffine(image, rotation_matrix, (image.shape[1], image.shape[0]))
 
     # Extract the ROI
-    x, y = int(center[0] - width // 2), int(center[1] - height // 2)
+    x = np.clip(int(center[0] - width // 2), 0, width - 1).astype(int)
+    y = np.clip(int(center[1] - height // 2), 0, height - 1).astype(int)
     roi = warped_image[y:y + int(height), x:x + int(width)]
 
     return roi, rotation_matrix
-
-
-import cv2
-import numpy as np
 
 
 def plot_roi(roi, landmarks, finger_ctr):
@@ -188,29 +191,37 @@ def plot_roi(roi, landmarks, finger_ctr):
     cv2.destroyAllWindows()
 
 
-def transform_landmarks(landmarks, rotation_matrix, roi_origin):
+def transform_landmarks(landmarks, center, wh, theta):
     """
-    Transforms the landmarks' positions based on the rotated cropped image.
+    Adjusts the landmarks to a rotated bounding box ROI.
 
-    :param landmarks: List of landmarks from the original image in (x, y) format.
-    :param rotation_matrix: 2x3 Affine rotation matrix used for cropping.
-    :param roi_origin: The top-left corner (x, y) of the cropped ROI in the rotated image.
-    :return: Transformed landmarks for the cropped image.
+    Parameters:
+    - landmarks: List of (x, y) tuples for each landmark.
+    - center: (x, y) tuple for the center of the bounding box.
+    - wh: (width, height) tuple for the bounding box.
+    - theta: Rotation angle in radians.
+
+    Returns:
+    List of adjusted (x, y) tuples for each landmark.
     """
-    transformed_landmarks = []
+    # Convert landmarks to numpy array for easy calculations
+    landmarks = np.array(landmarks, dtype=np.float32)
 
-    for landmark in landmarks:
-        # Convert landmark to homogeneous coordinates
-        original_coord = np.array([landmark[0], landmark[1], 1])
+    # 1. Translate landmarks so that center of bounding box is at (0, 0)
+    landmarks -= center
 
-        # Apply the affine transformation (rotation + translation)
-        rotated_coord = np.dot(rotation_matrix, original_coord)
+    # 2. Rotate landmarks by -theta to "unrotate" them
+    rotation_matrix = np.array([
+        [np.cos(-theta), -np.sin(-theta)],
+        [np.sin(-theta), np.cos(-theta)]
+    ])
+    landmarks = np.dot(landmarks, rotation_matrix.T)  # .T because we want to transform columns
 
-        # Adjust for the cropping (subtracting the roi_origin)
-        transformed_coord = (rotated_coord[0] - roi_origin[0], rotated_coord[1] - roi_origin[1])
-        transformed_landmarks.append(transformed_coord)
+    # 3. Scale landmarks according to size of ROI
+    landmarks[:, 0] /= wh[0]  # x-coordinate
+    landmarks[:, 1] /= wh[1]  # y-coordinate
 
-    return np.array(transformed_landmarks)
+    return np.array(landmarks)
 
 
 def load_landmarks(load_path):
@@ -228,72 +239,72 @@ def load_landmarks(load_path):
     return landmarks
 
 
+def load_and_annotate_image(hand_path, detector_path):
+    img = cv2.imread(hand_path, cv2.COLOR_RGBA2RGB)
+    detector = load_hand_landmarker(detector_path)
+    landmarks = locate_hand_landmarks(hand_path, detector)
+    annotated_image = draw_landmarks_on_image(
+        mp.Image(image_format=mp.ImageFormat.SRGB, data=img).numpy_view(),
+        landmarks
+    )
+    cv2.imwrite('../landmarksHand.jpg', annotated_image)
+    return img, landmarks
+
+
+HAND_PATH = '../dataset/hands/swolen/hand40.jpg'
+
+
+# Function to compute the midpoint
+def compute_midpoint(point1, point2):
+    return (point1[0] + point2[0]) // 2, (point1[1] + point2[1]) // 2
+
+
 if __name__ == "__main__":
-    landmarks = load_landmarks("../results/Landmarks/landmarks_hand4.pkl")
-    landmarks_pixel, mask = landmarks_to_pixel_coordinates('../results/SegMasks/segmask_hand4.jpg')
-    image_contour = extract_contour(mask)
-    plot_contour(mask, image_contour)
-
-    results = process_landmarks(image_contour, landmarks_pixel)
-    mean_distance = get_mean_pip_dip_distance(np.array(landmarks_pixel))
-
-    mask_roi = mask.copy()
-    # For demonstration: print the effective width for both MCP and TIP landmarks.
-    for key, idx in LANDMARKS_TO_PROCESS.items():
-        print(f"{key} EFFECTIVE WIDTH: {results[key]['thickness'] / mean_distance}")
-        if key.endswith("TIP"):
-            draw_closest_points(mask_roi, landmarks_pixel[idx], image_contour, case="TIP")
-        else:
-            draw_closest_points(mask_roi, landmarks_pixel[idx], image_contour)
-
-    # Extract and store all the ROIs
-    rois = []
-
-    # Draw bounding boxes using MCP and TIP landmarks for each finger.
-    finger_names = ["INDEX_FINGER", "MIDDLE_FINGER", "RING_FINGER", "PINKY"]
+    FINGERS = ["INDEX", "MIDDLE", "RING", "PINKY"]
+    rectangles = {"INDEX": [], "MIDDLE": [], "RING": [], "PINKY": []}
+    image, landmarks = load_and_annotate_image(HAND_PATH, '../hand_landmarker.task')
+    landmarks_pixel, mask = landmarks_to_pixel_coordinates(HAND_PATH)
     new_landmarks = dict()
-    for ctr, finger in enumerate(finger_names):
-        mcp = finger + "_MCP"
-        pip = finger + "_PIP"
-        dip = finger + "_DIP"
-        tip = finger + "_TIP"
+    for finger in FINGERS:
+        finger_landmarks = LANDMARKS_TO_PROCESS[finger]
+        for idx, landmark in enumerate(finger_landmarks.values()):
+            # print(joint_neighbours_right_hand[landmark])
+            if finger == "PINKY":
 
-        mcp_left = results[mcp]["closest_left"]
-        mcp_right = results[mcp]["closest_right"]
-        pip_left = results[pip]["closest_left"]
-        pip_right = results[pip]["closest_right"]
-        dip_left = results[dip]["closest_left"]
-        dip_right = results[dip]["closest_right"]
-        tip_left = results[tip]["closest_left"]
-        tip_right = results[tip]["closest_right"]
+                midpoint_left = compute_midpoint(landmarks_pixel[landmark],
+                                                 landmarks_pixel[joint_neighbours_right_hand[landmark]])
+                midpoint_right = (1, landmarks_pixel[landmark][1])
 
-        rect = draw_bounding_box(mask_roi,
-                                 [mcp_left, mcp_right, pip_right, pip_left, dip_left, dip_right, tip_right, tip_left])
-
-        roi, rotation_matrix = extract_roi(mask, rect)
+                rectangles[finger].append(np.array(midpoint_left))
+                rectangles[finger].append(np.array(midpoint_right))
+                # cv2.circle(image, midpoint_right, 3, (0, 0, 255), -1)
+                # cv2.putText(image, str(idx), midpoint_right, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+                # cv2.circle(image, midpoint_left, 3, (0, 0, 255), -1)
+                # cv2.putText(image, str(idx), midpoint_left, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+            else:
+                midpoint_left = compute_midpoint(landmarks_pixel[landmark],
+                                                 landmarks_pixel[joint_neighbours_right_hand[landmark][0]])
+                midpoint_right = compute_midpoint(landmarks_pixel[landmark],
+                                                  landmarks_pixel[joint_neighbours_right_hand[landmark][1]])
+                rectangles[finger].append(np.array(midpoint_left))
+                rectangles[finger].append(np.array(midpoint_right))
+                # rectangles[finger].append(np.array((landmarks_pixel[landmark][0], 1)))
+        rect = draw_bounding_box(image, rectangles[finger])
+        roi, rotation_matrix = extract_roi(image, rect)
         center, (width, height), theta = rect
-
         if width > height:
             width, height = height, width
             theta += 90  # Adjust the rotation
             rotation_matrix = cv2.getRotationMatrix2D(center, theta, 1)
 
         roi_origin = (int(center[0] - width // 2), int(center[1] - height // 2))
-
-        new_landmarks[finger] = transform_landmarks(
-            [landmarks_pixel[LANDMARKS_TO_PROCESS[mcp]],
-             landmarks_pixel[LANDMARKS_TO_PROCESS[pip]],
-             landmarks_pixel[LANDMARKS_TO_PROCESS[dip]],
-             landmarks_pixel[LANDMARKS_TO_PROCESS[tip]]],
-            rotation_matrix, roi_origin
-        )
-        print(new_landmarks[finger])
-        plot_roi(roi, new_landmarks[finger], ctr)
-        i = 0
-    # Draw landmarks on the image and display it.
-    mask_roi = draw_landmarks_on_image(mask_roi, landmarks)
-    cv2.imwrite('output_with_points.jpg', mask_roi)
-    cv2.namedWindow('Modified Image', cv2.WINDOW_NORMAL)
-    cv2.imshow('Modified Image', mask_roi)
+        finger_landmarks = [landmarks_pixel[finger_landmarks["MCP"]],
+                            landmarks_pixel[finger_landmarks["PIP"]],
+                            landmarks_pixel[finger_landmarks["DIP"]],
+                            landmarks_pixel[finger_landmarks["TIP"]]]
+        new_landmarks[finger] = transform_landmarks(finger_landmarks, center, (width, height), theta)
+        plot_roi(roi, new_landmarks[finger], finger)
+    cv2.namedWindow("image", cv2.WINDOW_NORMAL)
+    cv2.imshow("image", image)
     cv2.waitKey(0)
     cv2.destroyAllWindows()

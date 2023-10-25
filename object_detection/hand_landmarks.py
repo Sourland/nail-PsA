@@ -41,22 +41,30 @@ def resize_and_show(image, result_path):
 def remove_bg_and_whiten(image_path):
     # 1. Open the RGBA image using OpenCV
     img = cv2.imread(image_path, cv2.COLOR_BGR2RGB)  # Read with alpha channel
-    img_ycrcb = cv2.cvtColor(img, cv2.COLOR_RGB2YCrCb)
-    img_ycrcb[:, :, 0] = cv2.equalizeHist(img_ycrcb[:, :, 0])
-    equalized_img = cv2.cvtColor(img_ycrcb, cv2.COLOR_YCrCb2RGB)
+    # img_ycrcb = cv2.cvtColor(img, cv2.COLOR_RGB2YCrCb)
+    # img_ycrcb[:, :, 0] = cv2.equalizeHist(img_ycrcb[:, :, 0])
+    # equalized_img = cv2.cvtColor(img_ycrcb, cv2.COLOR_YCrCb2RGB)
 
     # 2. Remove image background (assuming you've a function 'remove_background' to do this)
-    img_without_bg = remove(equalized_img, session=my_session)
+    img_without_bg = remove(img, session=my_session)
     if img_without_bg.shape[2] == 4:
         img_without_bg = img_without_bg[:, :, :3]
     # 3. Iterate through each pixel in the image, and if it's not black, turn it white
-    mask = np.all(img_without_bg != [0, 0, 0], axis=-1)
 
-    output_image = img_without_bg.copy()
     # output_image[mask] = [255, 255, 255]
 
     # 4. Return the modified MxNx3 image
-    return output_image, mask
+    return img_without_bg
+
+
+def segment_image(image, model_path):
+    base_options = python.BaseOptions(model_asset_path=model_path)
+    options = vision.ImageSegmenterOptions(base_options=base_options,
+                                           output_confidence_masks=True)
+    with vision.ImageSegmenter.create_from_options(options) as segmenter:
+        segmentation_result = segmenter.segment(image)
+        segmentation_mask = segmentation_result.confidence_masks[SKIN_CLASS].numpy_view()
+    return segmentation_mask
 
 
 def process_mask(segmentation_mask, image_data):
@@ -143,9 +151,10 @@ for image_filename in image_filenames:
 
     which_hand = landmarks.handedness[0][0].category_name
 
-    mp_image = mp.Image.create_from_file(HAND_PATH)
-    output_image, thresholded_mask = remove_bg_and_whiten(HAND_PATH)
-    # output_image, thresholded_mask = process_mask(segmentation_mask, image)
+    output_image = remove_bg_and_whiten(HAND_PATH)
+    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=output_image.astype(np.uint8))
+    segmentation_mask = segment_image(mp_image, '../selfie_multiclass_256x256.tflite')
+    output_image, thresholded_mask = process_mask(segmentation_mask, image)
 
     annotated_image = draw_landmarks_on_image(
         mp.Image(image_format=mp.ImageFormat.SRGB, data=output_image).numpy_view(),
