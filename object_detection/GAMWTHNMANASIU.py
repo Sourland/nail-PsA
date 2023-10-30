@@ -38,11 +38,10 @@ LANDMARKS_TO_PROCESS = {
 }
 
 
-def landmarks_to_pixel_coordinates(image_path: str) -> tuple[list, np.ndarray]:
-    image = cv2.imread(image_path)
+def landmarks_to_pixel_coordinates(image) -> list:
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     return [landmark_to_pixels(gray, landmarks.hand_landmarks[0], idx) for idx in
-            range(len(landmarks.hand_landmarks[0]))], image
+            range(len(landmarks.hand_landmarks[0]))]
 
 
 def extract_contour(image: np.ndarray) -> np.ndarray:
@@ -112,6 +111,10 @@ def process_landmarks(image_contour: np.ndarray, landmarks_pixel: list[list[int]
     return results
 
 
+def pad_image(image: np.ndarray, padding: int = 50) -> np.ndarray:
+    return cv2.copyMakeBorder(image, padding, padding, padding, padding, cv2.BORDER_CONSTANT, value=(0, 0, 0))
+
+
 def draw_bounding_box(image: np.ndarray, points: list[np.ndarray]) -> tuple[np.ndarray, np.ndarray, float]:
     """Draw a rotated bounding box around the given points on the image."""
     # Convert the list of points to a suitable format for cv2.minAreaRect
@@ -155,8 +158,7 @@ def extract_roi(image, rect, rotation=False):
     warped_image = cv2.warpAffine(image, rotation_matrix, (image.shape[1], image.shape[0]))
 
     # Extract the ROI
-    x = np.clip(int(center[0] - width // 2), 0, width - 1).astype(int)
-    y = np.clip(int(center[1] - height // 2), 0, height - 1).astype(int)
+    x, y = int(center[0] - width // 2), int(center[1] - height // 2)
     roi = warped_image[y:y + int(height), x:x + int(width)]
 
     return roi, rotation_matrix
@@ -182,7 +184,7 @@ def plot_roi(roi, landmarks, finger_ctr):
             cv2.line(roi, (prev_x, prev_y), (x, y), (255, 0, 0), 1)
 
     # Save the image with landmarks
-    cv2.imwrite(f'finger_{finger_ctr}.jpg', roi)
+    # cv2.imwrite(f'finger_{finger_ctr}.jpg', roi)
 
     # Display the image
     cv2.namedWindow('ROI', cv2.WINDOW_NORMAL)
@@ -239,8 +241,9 @@ def load_landmarks(load_path):
     return landmarks
 
 
-def load_and_annotate_image(hand_path, detector_path):
+def load_and_annotate_image(hand_path, detector_path, padding=250):
     img = cv2.imread(hand_path, cv2.COLOR_RGBA2RGB)
+    img = pad_image(img, padding)
     detector = load_hand_landmarker(detector_path)
     landmarks = locate_hand_landmarks(hand_path, detector)
     annotated_image = draw_landmarks_on_image(
@@ -251,7 +254,7 @@ def load_and_annotate_image(hand_path, detector_path):
     return img, landmarks
 
 
-HAND_PATH = '../dataset/hands/swolen/hand40.jpg'
+HAND_PATH = '../dataset/hands/swolen/hand16.jpg'
 
 
 # Function to compute the midpoint
@@ -263,7 +266,7 @@ if __name__ == "__main__":
     FINGERS = ["INDEX", "MIDDLE", "RING", "PINKY"]
     rectangles = {"INDEX": [], "MIDDLE": [], "RING": [], "PINKY": []}
     image, landmarks = load_and_annotate_image(HAND_PATH, '../hand_landmarker.task')
-    landmarks_pixel, mask = landmarks_to_pixel_coordinates(HAND_PATH)
+    landmarks_pixel = landmarks_to_pixel_coordinates(image)
     new_landmarks = dict()
     for finger in FINGERS:
         finger_landmarks = LANDMARKS_TO_PROCESS[finger]
@@ -288,7 +291,7 @@ if __name__ == "__main__":
                                                   landmarks_pixel[joint_neighbours_right_hand[landmark][1]])
                 rectangles[finger].append(np.array(midpoint_left))
                 rectangles[finger].append(np.array(midpoint_right))
-                # rectangles[finger].append(np.array((landmarks_pixel[landmark][0], 1)))
+                rectangles[finger].append(np.array((landmarks_pixel[landmark][0], 1)))
         rect = draw_bounding_box(image, rectangles[finger])
         roi, rotation_matrix = extract_roi(image, rect)
         center, (width, height), theta = rect
