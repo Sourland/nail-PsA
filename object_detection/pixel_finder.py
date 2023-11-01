@@ -1,8 +1,7 @@
 import cv2
 import numpy as np
 from mediapipe.tasks.python import vision
-
-from landmarks_constants import joint_neighbours_left_hand, joint_neighbours_right_hand
+from .landmarks_constants import * 
 
 
 def find_bounding_box(image, landmarks, landmark_name, which_hand):
