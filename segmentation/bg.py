@@ -13,7 +13,6 @@ import torch.nn.functional
 import torch.nn.functional
 from hsh.library.hash import Hasher
 from .u2net import detect, u2net
-# from utilities import download_files_from_github
 
 # closes https://github.com/nadermx/backgroundremover/issues/18
 if torch.cuda.is_available():
@@ -171,6 +170,8 @@ def get_model(model_name):
         return detect.load_model(model_name="u2net")
 
 
+import numpy as np
+
 def remove(
     data,
     model_name="u2net",
@@ -181,7 +182,7 @@ def remove(
     alpha_matting_base_size=1000,
 ):
     model = get_model(model_name)
-    img = Image.open(io.BytesIO(data)).convert("RGB")
+    img = Image.fromarray(data.astype('uint8'), 'RGB')
     mask = detect.predict(model, np.array(img)).convert("L")
 
     if alpha_matting:
@@ -196,10 +197,11 @@ def remove(
     else:
         cutout = naive_cutout(img, mask)
 
-    bio = io.BytesIO()
-    cutout.save(bio, "PNG")
+    # Convert the PIL Image back to ndarray
+    cutout_array = np.array(cutout)
 
-    return bio.getbuffer()
+    return cutout_array
+
 
 
 def iter_frames(path):

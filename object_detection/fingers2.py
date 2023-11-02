@@ -143,7 +143,7 @@ def process_image(PATH, OUTPUT_DIR):
     # result = backgroundremover.bg.remove(image)
     # cv2.imwrite(OUTPUT_PATH, result)
     # cmd = ["backgroundremover", "-i", PATH, "-m", "u2net", "-o", OUTPUT_PATH]
-    result = segmentation.bg.remove(image)
+    result = segmentation.bg.remove(data=image)
     cv2.namedWindow('Image with Contour', cv2.WINDOW_NORMAL)
     cv2.imshow('Image with Contour', result)
     cv2.waitKey(0)
