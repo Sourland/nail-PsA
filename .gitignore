@@ -1,4 +1,5 @@
 dataset
+results
 *.pdf
 .idea
 __pycache__
@@ -8,3 +9,4 @@ sam_vit_h_4b8939.pth
 *.jpeg
 *.p
 *.zip
+u2net_human_seg.onnx
