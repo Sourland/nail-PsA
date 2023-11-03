@@ -5,7 +5,6 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 from mediapipe import solutions
 from mediapipe.framework.formats import landmark_pb2
-
 MARGIN = 10  # pixels
 FONT_SIZE = 1
 FONT_THICKNESS = 1
@@ -34,31 +33,7 @@ def resize_image(img: np.ndarray, new_size: int) -> np.ndarray:
     return cv2.resize(img, dim, interpolation=cv2.INTER_AREA)
 
 
-def load_hand_landmarker(path: str) -> vision.HandLandmarker:
-    """
-    Loads a hand landmark detection model from the specified path and returns a HandLandmarker object.
-
-    Args:
-        path (str): The path to the model asset file.
-
-    Returns:
-        vision.HandLandmarker: A HandLandmarker object for detecting landmarks on hands in images.
-
-    Raises:
-        None
-    """
-    # Define the base options for loading the model
-    base_options = python.BaseOptions(model_asset_path=path)
-
-    # Set options for the HandLandmarker object
-    options = vision.HandLandmarkerOptions(base_options=base_options, num_hands=1, min_hand_detection_confidence=0.01,
-                                           min_hand_presence_confidence=0.01)
-
-    # Create and return the HandLandmarker object
-    return vision.HandLandmarker.create_from_options(options)
-
-
-def locate_hand_landmarks(image: str, detector: vision.HandLandmarker) -> vision.HandLandmarkerResult:
+def locate_hand_landmarks(image_path: str, detector_path: str) -> vision.HandLandmarkerResult:
     """
     Detects hand landmarks in the input image using the specified HandLandmarker object.
 
@@ -72,11 +47,16 @@ def locate_hand_landmarks(image: str, detector: vision.HandLandmarker) -> vision
     Raises:
         None
     """
-    # Convert the input image to a mediapipe image
-    mediapipe_image = mp.Image.create_from_file(image)
+    base_options = python.BaseOptions(model_asset_path=detector_path)
 
+    options = vision.HandLandmarkerOptions(base_options=base_options,
+                                           num_hands = 2,
+                                           min_hand_detection_confidence=0.01)
+    detector = vision.HandLandmarker.create_from_options(options)
+    # Convert the input image to a mediapipe image
+    mediapipe_image = mp.Image.create_from_file(image_path)
     # Use the HandLandmarker object to detect hand landmarks in the mediapipe image
-    return detector.detect(mediapipe_image)
+    return mediapipe_image.numpy_view(), detector.detect(mediapipe_image)
 
 
 def draw_landmarks_on_image(rgb_image: np.ndarray, detection_result: vision.HandLandmarkerResult) -> np.ndarray:

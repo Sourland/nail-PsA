@@ -7,22 +7,27 @@ from mediapipe.tasks.python import vision
 import mediapipe as mp
 from .landmarks_constants import *
 from .pixel_finder import landmark_to_pixels
-from .utils import load_hand_landmarker, locate_hand_landmarks, draw_landmarks_on_image
+from .utils import locate_hand_landmarks, draw_landmarks_on_image
 import subprocess
 import segmentation
-def get_landmarks(image_path, detector_path):
-    img = cv2.imread(image_path, cv2.COLOR_RGBA2RGB)
-    detector = load_hand_landmarker(detector_path)
-    landmarks = locate_hand_landmarks(image_path, detector)
-    return landmarks
 
 
-def load_image_and_locate_landmarks(hand_path, detector_path):
-    img = cv2.imread(hand_path, cv2.COLOR_RGBA2RGB)
-    detector = load_hand_landmarker(detector_path)
-    landmarks = locate_hand_landmarks(hand_path, detector)
-
-    return img, landmarks
+def resize_longest_edge_to_target(image, target_size=330):
+    height, width, _ = image.shape
+    
+    # Determine which side is the longest
+    if max(height, width) == height:
+        new_height = target_size
+        aspect_ratio = width / height
+        new_width = int(new_height * aspect_ratio)
+    else:
+        new_width = target_size
+        aspect_ratio = height / width
+        new_height = int(new_width * aspect_ratio)
+    
+    resized_image = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
+    
+    return resized_image
 
 
 def get_segmentation_mask(image: np.ndarray, threshold: int = 11) -> np.ndarray:
@@ -138,56 +143,37 @@ def draw_landmarks_and_connections(image, landmarks, contour):
 
 
 def process_image(PATH, OUTPUT_DIR):
-    image = cv2.imread(PATH, cv2.COLOR_RGBA2RGB)
-    OUTPUT_PATH = os.path.join(OUTPUT_DIR, "seg_" + os.path.basename(PATH))
-    # result = backgroundremover.bg.remove(image)
-    # cv2.imwrite(OUTPUT_PATH, result)
-    # cmd = ["backgroundremover", "-i", PATH, "-m", "u2net", "-o", OUTPUT_PATH]
-    result = segmentation.bg.remove(data=image)
-    cv2.namedWindow('Image with Contour', cv2.WINDOW_NORMAL)
-    cv2.imshow('Image with Contour', result)
-    cv2.waitKey(0)
-    # print(os.path.basename(PATH))
-    _,  landmarks = load_image_and_locate_landmarks(OUTPUT_PATH, "hand_landmarker.task")
+    # # print(os.path.basename(PATH))
+    image,  landmarks = locate_hand_landmarks(PATH, "hand_landmarker.task")
     if not landmarks.hand_landmarks:
-        return
+        print(os.path.basename(PATH))  
     else:
         landmarks = landmarks
-    image = cv2.imread(OUTPUT_PATH, cv2.COLOR_RGBA2RGB)    
-    landmark_pixels = landmarks_to_pixel_coordinates(image, landmarks)
-    seg_mask = get_segmentation_mask(image)
-    contour = extract_contour(seg_mask)
-
-    rgb_mask = cv2.cvtColor(seg_mask, cv2.COLOR_GRAY2RGB)
-    output = draw_landmarks_and_connections(rgb_mask, landmark_pixels, contour)
-    
+    annotated_image = draw_landmarks_on_image(image, landmarks)
+    OUTPUT_PATH = os.path.join(OUTPUT_DIR, "land_" + os.path.basename(PATH))
+    cv2.imwrite(OUTPUT_PATH, cv2.cvtColor(annotated_image, cv2.COLOR_RGB2BGR))
+    # landmark_pixels = landmarks_to_pixel_coordinates(image, landmarks)
+    # result =  segmentation.bg.remove(data=image)
+    # seg_mask = get_segmentation_mask(result)
+    # contour = extract_contour(seg_mask)
+    # rgb_mask = cv2.cvtColor(seg_mask, cv2.COLOR_GRAY2RGB)
+    # output = draw_landmarks_and_connections(rgb_mask, landmark_pixels, contour)
+    # OUTPUT_PATH = os.path.join(OUTPUT_DIR, "seg_" + os.path.basename(PATH))
     # cv2.imwrite(OUTPUT_PATH, output)
-    cv2.namedWindow('Image with Contour', cv2.WINDOW_NORMAL)
-    cv2.imshow('Image with Contour', output)
-    cv2.waitKey(0)
 
-    cv2.drawContours(seg_mask, [contour], 0, 128, 2)
-    cv2.namedWindow('Image with Contour', cv2.WINDOW_NORMAL)
-    cv2.imshow('Image with Contour', seg_mask)
-    cv2.waitKey(0)
-    # # if not landmarks.hand_landmarks:
-    # #     return
-    # # else:
-    # #     landmarks = landmarks.hand_landmarks[0]
-    # cv2.imwrite(OUTPUT_PATH, output)
     
 
 
-if __name__ == "__main__":
-    DIR_PATH = "dataset/hands/swolen/"
-    OUTPUT_DIR = "results/SegMasks/"
+# if __name__ == "__main__":
+#     DIR_PATH = "dataset/hands/swolen/"
+#     OUTPUT_DIR = "results/LandmarkPics/"
 
-    # Make sure the output directory exists
-    if not os.path.exists(OUTPUT_DIR):
-        os.makedirs(OUTPUT_DIR)
+#     # Make sure the output directory exists
+#     if not os.path.exists(OUTPUT_DIR):
+#         os.makedirs(OUTPUT_DIR)
 
-    for image_name in os.listdir(DIR_PATH):
-        if image_name.endswith(('.jpg', '.jpeg', '.png')):  # checking file extension
-            image_path = os.path.join(DIR_PATH, image_name)
-            process_image(image_path, OUTPUT_DIR)
+#     for image_name in os.listdir(DIR_PATH):
+#         if image_name.endswith(('.jpg', '.jpeg', '.png')):  # checking file extension
+#             image_path = os.path.join(DIR_PATH, image_name)
+#             process_image(image_path, OUTPUT_DIR)
 
