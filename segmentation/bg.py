@@ -156,7 +156,7 @@ def alpha_matting_cutout(
 
 
 def naive_cutout(img, mask):
-    empty = Image.new("RGBA", (img.size), 0)
+    empty = Image.new("RGB", (img.size), 0)
     cutout = Image.composite(img, empty, mask.resize(img.size, Image.LANCZOS))
     return cutout
 
