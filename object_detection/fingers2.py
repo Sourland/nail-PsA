@@ -55,6 +55,31 @@ def get_segmentation_mask(image: np.ndarray, threshold: int = 11) -> np.ndarray:
     return mask.astype(np.uint8)
     
 
+def increase_contrast(img):
+    """
+    Enhance the contrast of an image using CLAHE.
+
+    Args:
+    - img (np.ndarray): The input image array.
+
+    Returns:
+    - np.ndarray: The contrast-enhanced image array.
+    """
+    
+    # Convert to grayscale (optional, but helps in many scenarios)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    
+    # Apply CLAHE (Contrast Limited Adaptive Histogram Equalization)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    enhanced = clahe.apply(gray)
+
+    # Merge channels if needed
+    if img.shape[-1] == 3:
+        enhanced = cv2.merge([enhanced, enhanced, enhanced])
+    
+    return enhanced
+
+
 def extract_contour(image: np.ndarray) -> np.ndarray:
     # Find contours
     contours, _ = cv2.findContours(image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -167,10 +192,11 @@ def extract_roi(image, rect):
 
     :param image: The original image.
     :param rect: A tuple that contains the center (x, y), size (width, height), and angle of the rectangle.
-    :return: The extracted region of interest.
+    :param padding: The amount of padding to add to each side of the image.
+    :return: The extracted region of interest and the rotation matrix.
     """
 
-    # Scale up the width and height by 10% for a margin.
+    # Scale up the width and height by 15% for a margin.
     center, size, theta = rect
     width, height = size
     width += width * 0.15
@@ -179,8 +205,8 @@ def extract_roi(image, rect):
     # Obtain the rotation matrix
     rotation_matrix = cv2.getRotationMatrix2D(center, theta, 1)
 
-    # Perform the affine transformation
-    warped_image = cv2.warpAffine(image, rotation_matrix, (image.shape[1], image.shape[0]))
+    # Perform the affine transformation on the padded image
+    warped_image = cv2.warpAffine(image, rotation_matrix, (image.shape[1], image.shape[0]), borderValue=(0, 0, 0))
 
     # Extract the ROI
     x, y = int(center[0] - width // 2), int(center[1] - height // 2)
@@ -189,53 +215,71 @@ def extract_roi(image, rect):
     return roi, rotation_matrix
 
 
-def plot_roi(roi, landmarks, finger_ctr):
+def transform_point(point, matrix):
+    # Convert point to homogeneous coordinates
+    homogeneous_point = np.array([[point[0]], [point[1]], [1]])
+    
+    # Apply affine transformation
+    transformed_point = np.squeeze(np.dot(matrix, homogeneous_point))
+    
+    # Return the transformed point in (x, y) format
+    return (int(transformed_point[0]), int(transformed_point[1]))
+
+
+def adjust_for_roi_crop(point, roi_center, roi_size):
     """
-    Plots the given region of interest with landmarks and connects them with a line.
+    Adjust the point coordinates based on the ROI cropping.
 
-    :param roi: The region of interest to be plotted.
-    :param landmarks: List of landmarks to be drawn.
-    :param finger_ctr: Counter for naming the saved image.
+    Args:
+    - point (tuple): The (x, y) coordinates of the point.
+    - roi_center (tuple): The (x, y) coordinates of the center of the ROI.
+    - roi_size (tuple): The (width, height) size dimensions of the ROI.
+
+    Returns:
+    - tuple: The adjusted (x, y) coordinates of the point within the cropped region.
     """
-
-    # # Draw the landmarks
-    # for i, point in enumerate(landmarks):
-    #     x, y = int(point[0]), int(point[1])
-    #     cv2.circle(roi, (x, y), 2, (0, 255, 0), -1)
-
-    #     # Connect landmarks with a line
-    #     if i > 0:
-    #         prev_x, prev_y = int(landmarks[i - 1][0]), int(landmarks[i - 1][1])
-    #         cv2.line(roi, (prev_x, prev_y), (x, y), (255, 0, 0), 1)
-
-    # Save the image with landmarks
-    # cv2.imwrite(f'finger_{finger_ctr}.jpg', roi)
-
-    # Display the image
-    cv2.namedWindow('ROI', cv2.WINDOW_NORMAL)
-    cv2.imshow('ROI', roi)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    x_offset = int(roi_center[0] - roi_size[0] // 2)
+    y_offset = int(roi_center[1] - roi_size[1] // 2)
+    
+    adjusted_x = point[0] - x_offset
+    adjusted_y = point[1] - y_offset
+    return np.array([adjusted_x, adjusted_y])
 
 
 def process_image(PATH, MASKS_OUTPUT_DIR, FINGER_OUTPUT_DIR, NAIL_OUTPUT_DIR):
     image,  landmarks = locate_hand_landmarks(PATH, "hand_landmarker.task")
+    padding = 200
     if not landmarks.hand_landmarks:
-        return 
+        print(f"Warning: No landmarks detected for {os.path.basename(PATH)}. Skipping save operation.")
+        return
     else:
         landmarks = landmarks
-    print(os.path.basename(PATH)) 
     landmark_pixels = landmarks_to_pixel_coordinates(image, landmarks)
-    result =  segmentation.bg.remove(data=image)
+    enhanced_image = increase_contrast(image)
+    result =  segmentation.bg.remove(data=enhanced_image)
     seg_mask = get_segmentation_mask(result)
     contour = extract_contour(seg_mask)
     rgb_mask = cv2.cvtColor(seg_mask, cv2.COLOR_GRAY2RGB)
     closest_points = closest_contour_point(landmark_pixels, contour)
+    image = cv2.copyMakeBorder(image, padding, padding, padding, padding, cv2.BORDER_CONSTANT, value=[0, 0, 0])
     for key in ['INDEX', 'MIDDLE', 'RING', 'PINKY']:
         finger_roi_points = [item for idx in landmarks_per_finger[key][1:] for item in closest_points[idx]]
         finger_roi_points.append(landmark_pixels[landmarks_per_finger[key][0]])
         rect = get_bounding_box(rgb_mask, finger_roi_points)
-        roi, _ = extract_roi(rgb_mask, rect)
+        roi, rotation_matrix = extract_roi(rgb_mask, rect)
+        dip = np.array(landmark_pixels[landmarks_per_finger[key][1]])
+        pip = np.array(landmark_pixels[landmarks_per_finger[key][2]])
+
+        # Rotate the landmarks
+        rotated_pip = transform_point(pip, rotation_matrix)
+        rotated_dip = transform_point(dip, rotation_matrix)
+
+        # Map the landmarks to the resized image
+        new_pip = adjust_for_roi_crop(rotated_pip, rect[0], rect[1])
+        new_dip = adjust_for_roi_crop(rotated_dip, rect[0], rect[1])
+        # Draw the landmarks on the resized image
+        cv2.circle(roi, new_pip, 3, (0, 0, 255), -1)
+        cv2.circle(roi, new_dip, 3, (0, 0, 255), -1)
         OUTPUT_PATH_FINGER = os.path.join(FINGER_OUTPUT_DIR, key + os.path.basename(PATH))
         if roi.size > 0 and roi is not None:
             cv2.imwrite(OUTPUT_PATH_FINGER, roi)
