@@ -2,7 +2,7 @@ from object_detection.fingers2 import process_image
 import os
 if __name__ == "__main__":
     DIR_PATH = "dataset/hands/swolen/"
-    OUTPUT_DIR = "results/SegMasks/"
+    OUTPUT_DIR = "results/LandmarkPics/"
 
     # Make sure the output directory exists
     if not os.path.exists(OUTPUT_DIR):
