@@ -248,20 +248,29 @@ def adjust_for_roi_crop(point, roi_center, roi_size):
 
 def process_image(PATH, MASKS_OUTPUT_DIR, FINGER_OUTPUT_DIR, NAIL_OUTPUT_DIR):
     image,  landmarks = locate_hand_landmarks(PATH, "hand_landmarker.task")
-    padding = 200
     if not landmarks.hand_landmarks:
-        print(f"Warning: No landmarks detected for {os.path.basename(PATH)}. Skipping save operation.")
+        print(f"Warning: No landmarks detected for {os.path.basename(PATH)}")
         return
     else:
         landmarks = landmarks
     landmark_pixels = landmarks_to_pixel_coordinates(image, landmarks)
     enhanced_image = increase_contrast(image)
-    result =  segmentation.bg.remove(data=enhanced_image)
+    padding = 250
+    try:
+        result = segmentation.bg.remove(data=enhanced_image)
+    except ValueError as e:
+        print(f"Caught a runtime error: {e} on image {os.path.basename(PATH)}")
+        return
+    result = cv2.copyMakeBorder(result, padding, padding, padding, padding, cv2.BORDER_CONSTANT, value=0)
+    landmark_pixels = [(x+padding, y+padding) for x, y in landmark_pixels]
     seg_mask = get_segmentation_mask(result)
     contour = extract_contour(seg_mask)
+    if len(contour.shape) == 1:
+        print(f"Warning: The contour is empty. Skipping {os.path.basename(PATH)}.")
+        return
     rgb_mask = cv2.cvtColor(seg_mask, cv2.COLOR_GRAY2RGB)
     closest_points = closest_contour_point(landmark_pixels, contour)
-    image = cv2.copyMakeBorder(image, padding, padding, padding, padding, cv2.BORDER_CONSTANT, value=[0, 0, 0])
+
     for key in ['INDEX', 'MIDDLE', 'RING', 'PINKY']:
         finger_roi_points = [item for idx in landmarks_per_finger[key][1:] for item in closest_points[idx]]
         finger_roi_points.append(landmark_pixels[landmarks_per_finger[key][0]])
