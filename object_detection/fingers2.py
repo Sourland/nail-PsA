@@ -12,36 +12,7 @@ import subprocess
 import segmentation
 
 
-def resize_longest_edge_to_target(image, target_size=330):
-    height, width, _ = image.shape
-    
-    # Determine which side is the longest
-    if max(height, width) == height:
-        new_height = target_size
-        aspect_ratio = width / height
-        new_width = int(new_height * aspect_ratio)
-    else:
-        new_width = target_size
-        aspect_ratio = height / width
-        new_height = int(new_width * aspect_ratio)
-    
-    resized_image = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
-    
-    return resized_image
-
-
 def get_segmentation_mask(image: np.ndarray, threshold: int = 11) -> np.ndarray:
-    """
-    Generate a binary segmentation mask based on pixel intensity.
-
-    Parameters:
-    - image: an RGB image in numpy array format.
-    - threshold: pixel values above this threshold will be set to 1, below will be set to 0.
-
-    Returns:
-    - Binary segmentation mask as numpy array.
-    """
-
     # Check if the image has three channels
     if len(image.shape) != 3 or image.shape[2] != 3:
         raise ValueError("Expected an RGB image with 3 channels. Received image with shape {}.".format(image.shape))
@@ -55,38 +26,13 @@ def get_segmentation_mask(image: np.ndarray, threshold: int = 11) -> np.ndarray:
     return mask.astype(np.uint8)
     
 
-def increase_contrast(img):
-    """
-    Enhance the contrast of an image using CLAHE.
-
-    Args:
-    - img (np.ndarray): The input image array.
-
-    Returns:
-    - np.ndarray: The contrast-enhanced image array.
-    """
-    
-    # Convert to grayscale (optional, but helps in many scenarios)
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    
-    # Apply CLAHE (Contrast Limited Adaptive Histogram Equalization)
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    enhanced = clahe.apply(gray)
-
-    # Merge channels if needed
-    if img.shape[-1] == 3:
-        enhanced = cv2.merge([enhanced, enhanced, enhanced])
-    
-    return enhanced
-
-
 def extract_contour(image: np.ndarray) -> np.ndarray:
     # Find contours
     contours, _ = cv2.findContours(image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     # Check if any contours were found
     if not contours:
-        raise ValueError("No contours found in the image")
+        return
 
     # Sort the contours by area in descending order
     contours = sorted(contours, key=cv2.contourArea, reverse=True)
@@ -103,17 +49,6 @@ def landmarks_to_pixel_coordinates(image, landmarks) -> list:
 
 
 def closest_contour_point(landmarks, contour):
-
-    """
-    For each landmark, find the closest left and right points on the contour.
-
-    Args:
-    - landmarks (list of tuples): List of landmarks as (x, y) coordinates.
-    - contour (numpy array): Contour returned by cv2.findContours.
-
-    Returns:
-    - List of tuples, each tuple containing two (x, y) coordinates - the closest left and right points on the contour for each landmark.
-    """
     closest_points = []
 
     for ctr, landmark in enumerate(landmarks):
@@ -147,14 +82,6 @@ def closest_contour_point(landmarks, contour):
 
 
 def draw_landmarks_and_connections(image, landmarks, closest_points):
-    """
-    Draw landmarks, closest left and right points on the contour, and lines connecting them on the image.
-
-    Args:
-    - image (numpy array): The image on which to draw.
-    - landmarks (list of tuples): List of landmarks as (x, y) coordinates.
-    - contour (numpy array): Contour returned by cv2.findContours.
-    """
     # Draw landmarks as red circles
     for landmark in landmarks:
         cv2.circle(image, tuple(map(int, landmark)), 3, (0, 0, 255), -1)
@@ -170,7 +97,6 @@ def draw_landmarks_and_connections(image, landmarks, closest_points):
 
 
 def get_bounding_box(image: np.ndarray, points: list[np.ndarray]) -> tuple[np.ndarray, np.ndarray, float]:
-    """Draw a rotated bounding box around the given points on the image."""
     # Convert the list of points to a suitable format for cv2.minAreaRect
     rect_points = np.array(points).reshape(-1, 1, 2).astype(int)
 
@@ -187,15 +113,6 @@ def get_bounding_box(image: np.ndarray, points: list[np.ndarray]) -> tuple[np.nd
 
 
 def extract_roi(image, rect):
-    """
-    Extracts and returns the region of interest inside the rectangle.
-
-    :param image: The original image.
-    :param rect: A tuple that contains the center (x, y), size (width, height), and angle of the rectangle.
-    :param padding: The amount of padding to add to each side of the image.
-    :return: The extracted region of interest and the rotation matrix.
-    """
-
     # Scale up the width and height by 15% for a margin.
     center, size, theta = rect
     width, height = size
@@ -227,17 +144,6 @@ def transform_point(point, matrix):
 
 
 def adjust_for_roi_crop(point, roi_center, roi_size):
-    """
-    Adjust the point coordinates based on the ROI cropping.
-
-    Args:
-    - point (tuple): The (x, y) coordinates of the point.
-    - roi_center (tuple): The (x, y) coordinates of the center of the ROI.
-    - roi_size (tuple): The (width, height) size dimensions of the ROI.
-
-    Returns:
-    - tuple: The adjusted (x, y) coordinates of the point within the cropped region.
-    """
     x_offset = int(roi_center[0] - roi_size[0] // 2)
     y_offset = int(roi_center[1] - roi_size[1] // 2)
     
@@ -246,72 +152,68 @@ def adjust_for_roi_crop(point, roi_center, roi_size):
     return np.array([adjusted_x, adjusted_y])
 
 
+def save_roi_image(roi, path):
+    if roi.size > 0 and roi is not None:
+        cv2.imwrite(path, roi)
+    else:
+        print(f"Warning: The ROI image is empty or None. Skipping save operation for finger {os.path.basename(path)}.")
+
+def process_finger(finger_key, landmarks_per_finger, closest_points, landmark_pixels, rgb_mask, PATH, OUTPUT_DIR):
+    finger_roi_points = [item for idx in landmarks_per_finger[finger_key][1:] for item in closest_points[idx]]
+    finger_roi_points.append(landmark_pixels[landmarks_per_finger[finger_key][0]])
+    
+    rect = get_bounding_box(rgb_mask, finger_roi_points)
+    roi, rotation_matrix = extract_roi(rgb_mask, rect)
+    
+    dip = np.array(landmark_pixels[landmarks_per_finger[finger_key][1]])
+    pip = np.array(landmark_pixels[landmarks_per_finger[finger_key][2]])
+
+    # Rotate the landmarks
+    rotated_pip = transform_point(pip, rotation_matrix)
+    rotated_dip = transform_point(dip, rotation_matrix)
+
+    # Map the landmarks to the resized image
+    new_pip = adjust_for_roi_crop(rotated_pip, rect[0], rect[1])
+    new_dip = adjust_for_roi_crop(rotated_dip, rect[0], rect[1])
+    
+    # Draw the landmarks on the resized image
+    cv2.circle(roi, new_pip, 3, (0, 0, 255), -1)
+    cv2.circle(roi, new_dip, 3, (0, 0, 255), -1)
+    
+    OUTPUT_PATH = os.path.join(OUTPUT_DIR, finger_key + os.path.basename(PATH))
+    save_roi_image(roi, OUTPUT_PATH)
+
 def process_image(PATH, MASKS_OUTPUT_DIR, FINGER_OUTPUT_DIR, NAIL_OUTPUT_DIR):
-    image,  landmarks = locate_hand_landmarks(PATH, "hand_landmarker.task")
+    image, landmarks = locate_hand_landmarks(PATH, "hand_landmarker.task")
+    
     if not landmarks.hand_landmarks:
         print(f"Warning: No landmarks detected for {os.path.basename(PATH)}")
         return
-    else:
-        landmarks = landmarks
+
     landmark_pixels = landmarks_to_pixel_coordinates(image, landmarks)
-    enhanced_image = increase_contrast(image)
+    enhanced_image = image
     padding = 250
+    
     try:
         result = segmentation.bg.remove(data=enhanced_image)
     except ValueError as e:
-        print(f"Caught a runtime error: {e} on image {os.path.basename(PATH)}")
+        print(f"Caught a value error: {e} on image {os.path.basename(PATH)}")
         return
+        
     result = cv2.copyMakeBorder(result, padding, padding, padding, padding, cv2.BORDER_CONSTANT, value=0)
     landmark_pixels = [(x+padding, y+padding) for x, y in landmark_pixels]
+    
     seg_mask = get_segmentation_mask(result)
+    OUTPUT_PATH_MASK = os.path.join(MASKS_OUTPUT_DIR, "seg_" + os.path.basename(PATH))
+    cv2.imwrite(OUTPUT_PATH_MASK, seg_mask)
+
     contour = extract_contour(seg_mask)
-    if len(contour.shape) == 1:
+    if contour is None or len(contour.shape) == 1:
         print(f"Warning: The contour is empty. Skipping {os.path.basename(PATH)}.")
         return
+
     rgb_mask = cv2.cvtColor(seg_mask, cv2.COLOR_GRAY2RGB)
     closest_points = closest_contour_point(landmark_pixels, contour)
 
     for key in ['INDEX', 'MIDDLE', 'RING', 'PINKY']:
-        finger_roi_points = [item for idx in landmarks_per_finger[key][1:] for item in closest_points[idx]]
-        finger_roi_points.append(landmark_pixels[landmarks_per_finger[key][0]])
-        rect = get_bounding_box(rgb_mask, finger_roi_points)
-        roi, rotation_matrix = extract_roi(rgb_mask, rect)
-        dip = np.array(landmark_pixels[landmarks_per_finger[key][1]])
-        pip = np.array(landmark_pixels[landmarks_per_finger[key][2]])
-
-        # Rotate the landmarks
-        rotated_pip = transform_point(pip, rotation_matrix)
-        rotated_dip = transform_point(dip, rotation_matrix)
-
-        # Map the landmarks to the resized image
-        new_pip = adjust_for_roi_crop(rotated_pip, rect[0], rect[1])
-        new_dip = adjust_for_roi_crop(rotated_dip, rect[0], rect[1])
-        # Draw the landmarks on the resized image
-        cv2.circle(roi, new_pip, 3, (0, 0, 255), -1)
-        cv2.circle(roi, new_dip, 3, (0, 0, 255), -1)
-        OUTPUT_PATH_FINGER = os.path.join(FINGER_OUTPUT_DIR, key + os.path.basename(PATH))
-        if roi.size > 0 and roi is not None:
-            cv2.imwrite(OUTPUT_PATH_FINGER, roi)
-        else:
-            print(f"Warning: The ROI image is empty or None. Skipping save operation for finger {os.path.basename(OUTPUT_PATH_FINGER)}.")
-
-    
-    OUTPUT_PATH_MASK = os.path.join(MASKS_OUTPUT_DIR, "seg_" + os.path.basename(PATH))
-    cv2.imwrite(OUTPUT_PATH_MASK, rgb_mask)
-
-    
-
-
-# if __name__ == "__main__":
-#     DIR_PATH = "dataset/hands/swolen/"
-#     OUTPUT_DIR = "results/LandmarkPics/"
-
-#     # Make sure the output directory exists
-#     if not os.path.exists(OUTPUT_DIR):
-#         os.makedirs(OUTPUT_DIR)
-
-#     for image_name in os.listdir(DIR_PATH):
-#         if image_name.endswith(('.jpg', '.jpeg', '.png')):  # checking file extension
-#             image_path = os.path.join(DIR_PATH, image_name)
-#             process_image(image_path, OUTPUT_DIR)
-
+        process_finger(key, landmarks_per_finger, closest_points, landmark_pixels, rgb_mask, PATH, FINGER_OUTPUT_DIR)

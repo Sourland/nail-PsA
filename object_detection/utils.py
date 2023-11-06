@@ -55,6 +55,7 @@ def locate_hand_landmarks(image_path: str, detector_path: str) -> vision.HandLan
     detector = vision.HandLandmarker.create_from_options(options)
     # Convert the input image to a mediapipe image
     mediapipe_image = mp.Image.create_from_file(image_path)
+
     # Use the HandLandmarker object to detect hand landmarks in the mediapipe image
     return mediapipe_image.numpy_view().astype(np.uint8), detector.detect(mediapipe_image)
 
