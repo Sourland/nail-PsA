@@ -161,10 +161,10 @@ def save_roi_image(roi, path):
 def process_finger(finger_key, landmarks_per_finger, closest_points, landmark_pixels, rgb_mask, PATH, OUTPUT_DIR):
     finger_roi_points = [item for idx in landmarks_per_finger[finger_key][1:] for item in closest_points[idx]]
     finger_roi_points.append(landmark_pixels[landmarks_per_finger[finger_key][0]])
-    
+
     rect = get_bounding_box(rgb_mask, finger_roi_points)
     roi, rotation_matrix = extract_roi(rgb_mask, rect)
-    
+
     dip = np.array(landmark_pixels[landmarks_per_finger[finger_key][1]])
     pip = np.array(landmark_pixels[landmarks_per_finger[finger_key][2]])
 
@@ -175,13 +175,34 @@ def process_finger(finger_key, landmarks_per_finger, closest_points, landmark_pi
     # Map the landmarks to the resized image
     new_pip = adjust_for_roi_crop(rotated_pip, rect[0], rect[1])
     new_dip = adjust_for_roi_crop(rotated_dip, rect[0], rect[1])
+
+    # Compute pixel width of object at the row of new_pip
+    pip_width = find_object_width_at_row(roi, new_pip[1], new_pip[0])
     
-    # Draw the landmarks on the resized image
-    cv2.circle(roi, new_pip, 3, (0, 0, 255), -1)
-    cv2.circle(roi, new_dip, 3, (0, 0, 255), -1)
+    # Compute pixel width of object at the row of new_dip
+    dip_width = find_object_width_at_row(roi, new_dip[1], new_dip[0])
+
+    # Compute vertical pixel distance between new_pip and new_dip
+    vertical_distance = abs(new_dip[1] - new_pip[1])
+
+    effective_pip_width = pip_width / vertical_distance
+    effective_dip_width = dip_width / vertical_distance
+
+    # Return pip_width, dip_width, and vertical_distance
+    return effective_pip_width, effective_dip_width
+
+
+def find_object_width_at_row(image, row, col):
+    """Helper function to compute the width of the object at a specific row."""
+    left = col
+    right = col
+    while left > 0 and np.all(image[row, left] != [0, 0, 0]):
+        left -= 1
+    while right < image.shape[1] - 1 and np.all(image[row, right] != [0, 0, 0]):
+        right += 1
+    return (right - left)
+
     
-    OUTPUT_PATH = os.path.join(OUTPUT_DIR, finger_key + os.path.basename(PATH))
-    save_roi_image(roi, OUTPUT_PATH)
 
 def process_image(PATH, MASKS_OUTPUT_DIR, FINGER_OUTPUT_DIR, NAIL_OUTPUT_DIR):
     image, landmarks = locate_hand_landmarks(PATH, "hand_landmarker.task")
@@ -214,6 +235,10 @@ def process_image(PATH, MASKS_OUTPUT_DIR, FINGER_OUTPUT_DIR, NAIL_OUTPUT_DIR):
 
     rgb_mask = cv2.cvtColor(seg_mask, cv2.COLOR_GRAY2RGB)
     closest_points = closest_contour_point(landmark_pixels, contour)
-
+    effective_pip_widths, effective_dip_widths = [], []
     for key in ['INDEX', 'MIDDLE', 'RING', 'PINKY']:
-        process_finger(key, landmarks_per_finger, closest_points, landmark_pixels, rgb_mask, PATH, FINGER_OUTPUT_DIR)
+        pip_width, dip_width = process_finger(key, landmarks_per_finger, closest_points, landmark_pixels, rgb_mask, PATH, FINGER_OUTPUT_DIR)
+        effective_pip_widths.append(pip_width)
+        effective_dip_widths.append(dip_width)
+
+    return effective_pip_widths, effective_dip_widths
