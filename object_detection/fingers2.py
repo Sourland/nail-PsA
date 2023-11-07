@@ -209,7 +209,7 @@ def process_image(PATH, MASKS_OUTPUT_DIR, FINGER_OUTPUT_DIR, NAIL_OUTPUT_DIR):
     
     if not landmarks.hand_landmarks:
         print(f"Warning: No landmarks detected for {os.path.basename(PATH)}")
-        return
+        return [0, 0, 0, 0], [0, 0, 0, 0]
 
     landmark_pixels = landmarks_to_pixel_coordinates(image, landmarks)
     enhanced_image = image
@@ -219,7 +219,7 @@ def process_image(PATH, MASKS_OUTPUT_DIR, FINGER_OUTPUT_DIR, NAIL_OUTPUT_DIR):
         result = segmentation.bg.remove(data=enhanced_image)
     except ValueError as e:
         print(f"Caught a value error: {e} on image {os.path.basename(PATH)}")
-        return
+        return [0, 0, 0, 0], [0, 0, 0, 0]
         
     result = cv2.copyMakeBorder(result, padding, padding, padding, padding, cv2.BORDER_CONSTANT, value=0)
     landmark_pixels = [(x+padding, y+padding) for x, y in landmark_pixels]
@@ -231,7 +231,7 @@ def process_image(PATH, MASKS_OUTPUT_DIR, FINGER_OUTPUT_DIR, NAIL_OUTPUT_DIR):
     contour = extract_contour(seg_mask)
     if contour is None or len(contour.shape) == 1:
         print(f"Warning: The contour is empty. Skipping {os.path.basename(PATH)}.")
-        return
+        return [0, 0, 0, 0], [0, 0, 0, 0]
 
     rgb_mask = cv2.cvtColor(seg_mask, cv2.COLOR_GRAY2RGB)
     closest_points = closest_contour_point(landmark_pixels, contour)
