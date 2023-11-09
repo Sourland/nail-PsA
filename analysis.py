@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import os
 import numpy as np
+from scipy.stats import bootstrap
+from sklearn.utils import resample
 # Function to plot histograms together
 # Function to plot histograms together with the same number of bins
 def compare_histograms(df1, df2, column, label1, label2, output_dir, bins=None):
@@ -13,8 +15,8 @@ def compare_histograms(df1, df2, column, label1, label2, output_dir, bins=None):
         combined_data = pd.concat([df1[column], df2[column]])
         bins = np.histogram_bin_edges(combined_data, bins='auto')
     
-    sns.histplot(df1[column], kde=True, label=label1, color='blue', alpha=0.5, bins=bins)
-    sns.histplot(df2[column], kde=True, label=label2, color='red', alpha=0.5, bins=bins)
+    sns.histplot(df1[column], kde=True, label=label1, color='blue', alpha=0.5, bins=bins, stat='probability')
+    sns.histplot(df2[column], kde=True, label=label2, color='red', alpha=0.5, bins=bins, stat='probability')
     
     plt.title(f'Comparison of {column}')
     plt.xlabel(column)

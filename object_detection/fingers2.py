@@ -158,7 +158,7 @@ def save_roi_image(roi, path):
     else:
         print(f"Warning: The ROI image is empty or None. Skipping save operation for finger {os.path.basename(path)}.")
 
-def process_finger(finger_key, landmarks_per_finger, closest_points, landmark_pixels, rgb_mask, PATH, OUTPUT_DIR):
+def process_finger(finger_key, landmarks_per_finger, closest_points, landmark_pixels, rgb_mask):
     finger_roi_points = [item for idx in landmarks_per_finger[finger_key][1:] for item in closest_points[idx]]
     finger_roi_points.append(landmark_pixels[landmarks_per_finger[finger_key][0]])
 
@@ -185,11 +185,8 @@ def process_finger(finger_key, landmarks_per_finger, closest_points, landmark_pi
     # Compute vertical pixel distance between new_pip and new_dip
     vertical_distance = abs(new_dip[1] - new_pip[1])
 
-    effective_pip_width = pip_width / vertical_distance
-    effective_dip_width = dip_width / vertical_distance
-
     # Return pip_width, dip_width, and vertical_distance
-    return effective_pip_width, effective_dip_width
+    return pip_width, dip_width, vertical_distance
 
 
 def find_object_width_at_row(image, row, col):
@@ -235,10 +232,14 @@ def process_image(PATH, MASKS_OUTPUT_DIR, FINGER_OUTPUT_DIR, NAIL_OUTPUT_DIR):
 
     rgb_mask = cv2.cvtColor(seg_mask, cv2.COLOR_GRAY2RGB)
     closest_points = closest_contour_point(landmark_pixels, contour)
-    effective_pip_widths, effective_dip_widths = [], []
+    vertical_distances = []
+    pip_widths, dip_widths = [], []
     for key in ['INDEX', 'MIDDLE', 'RING', 'PINKY']:
-        pip_width, dip_width = process_finger(key, landmarks_per_finger, closest_points, landmark_pixels, rgb_mask, PATH, FINGER_OUTPUT_DIR)
-        effective_pip_widths.append(pip_width)
-        effective_dip_widths.append(dip_width)
+        pip_width, dip_width, vertical_distance = process_finger(key, landmarks_per_finger, closest_points, landmark_pixels, rgb_mask)
+        pip_widths.append(pip_width)
+        dip_widths.append(dip_width)
+        vertical_distances.append(vertical_distance)
 
-    return effective_pip_widths, effective_dip_widths
+    mean_vertical_distance = np.mean(vertical_distances)
+
+    return np.array(pip_widths) / mean_vertical_distance, np.array(dip_widths) / mean_vertical_distance
