@@ -1,3 +1,4 @@
+import os
 import cv2
 import numpy as np
 import mediapipe as mp
@@ -105,3 +106,25 @@ def draw_landmarks_on_image(rgb_image: np.ndarray, detection_result: vision.Hand
                     FONT_SIZE, HANDEDNESS_TEXT_COLOR, FONT_THICKNESS, cv2.LINE_AA)
 
     return annotated_image
+
+
+def draw_landmarks_and_connections(image, landmarks, closest_points):
+    # Draw landmarks as red circles
+    for landmark in landmarks:
+        cv2.circle(image, tuple(map(int, landmark)), 3, (0, 0, 255), -1)
+
+    # Draw closest contour points as blue circles and lines connecting them in green
+    for landmark, (left_closest_point, right_closest_point) in zip(landmarks, closest_points):
+        cv2.circle(image, tuple(map(int, left_closest_point)), 3, (255, 0, 0), -1)
+        cv2.circle(image, tuple(map(int, right_closest_point)), 3, (255, 0, 0), -1)
+        cv2.line(image, tuple(map(int, landmark)), tuple(map(int, left_closest_point)), (0, 255, 0), 1)
+        cv2.line(image, tuple(map(int, landmark)), tuple(map(int, right_closest_point)), (0, 255, 0), 1)
+
+    return image
+
+
+def save_roi_image(roi, path):
+    if roi.size > 0 and roi is not None:
+        cv2.imwrite(path, roi)
+    else:
+        print(f"Warning: The ROI image is empty or None. Skipping save operation for finger {os.path.basename(path)}.")

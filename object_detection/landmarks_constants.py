@@ -79,3 +79,6 @@ def flip_joints_for_right(joints_dict):
 
 
 joint_neighbours_right_hand = flip_joints_for_right(joint_neighbours_left_hand)
+
+
+finger_neighbors = {'INDEX' : ['MIDDLE'], 'MIDDLE' : ['INDEX', 'RING'], 'RING' : ['MIDDLE', 'PINKY'], 'PINKY' : ['RING']}
