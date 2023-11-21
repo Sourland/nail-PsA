@@ -89,15 +89,11 @@ def process_image(PATH, MASKS_OUTPUT_DIR, FINGER_OUTPUT_DIR, NAIL_OUTPUT_DIR):
     vertical_distances = []
     pip_widths, dip_widths = [], []
     lol = ['INDEX', 'MIDDLE', 'RING', 'PINKY']
-    for idx, finger in enumerate(["MIDDLE"]):
-        tip = landmarks_per_finger[finger][-1]
-        tip_proxy = closest_contour_point(landmark_pixel_positions[tip], np.squeeze(hull))
-        left_contour, right_contour = get_left_and_right_contour_points(tip_proxy, contour)
-        closest_mcp_left = closest_contour_point(landmark_pixel_positions[landmarks_per_finger[finger][0]], left_contour)
-        closest_mcp_right = closest_contour_point(landmark_pixel_positions[landmarks_per_finger[finger][0]], right_contour)
-        # finger_contour = create_finger_contour(tip_proxy, left_contour, right_contour, closest_mcp_left, closest_mcp_right)
-        cv2.polylines(rgb_mask, [right_contour], isClosed=False, color=(randint(128, 255), randint(128, 255), 0), thickness=2)
-        cv2.polylines(rgb_mask, [left_contour], isClosed=False, color=(randint(128, 255), 0, randint(128, 255)), thickness=2)
+    for key in ['INDEX', 'MIDDLE', 'RING', 'PINKY']:
+        pip_width, dip_width, vertical_distance = process_finger(key, landmarks_per_finger, closest_points, landmark_pixels, rgb_mask)
+        pip_widths.append(pip_width)
+        dip_widths.append(dip_width)
+        vertical_distances.append(vertical_distance)
 
         # rect, new_pip, new_dip, roi = transform_landmarks(finger, landmarks_per_finger, finger_contour, landmark_pixel_positions, rgb_mask)
         # pip_width, dip_width, vertical_distance = calculate_widths_and_distance(new_pip, new_dip, roi)
