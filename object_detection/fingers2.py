@@ -7,11 +7,12 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 import mediapipe as mp
 from object_detection.contour_extraction import closest_contour_point, create_finger_contour, extract_contour, get_left_and_right_contour_points, reorient_contour
-from object_detection.landmarks import calculate_widths_and_distance, landmarks_to_pixel_coordinates, transform_landmarks
+from object_detection.landmarks import adjust_for_roi_crop, calculate_widths_and_distance, find_object_width_at_row, landmarks_to_pixel_coordinates, transform_landmarks, transform_point
+from object_detection.roi_extraction import extract_roi, get_bounding_box
 from object_detection.segmentation import get_segmentation_mask
 from .landmarks_constants import *
 from .pixel_finder import landmark_to_pixels
-from .utils import locate_hand_landmarks, draw_landmarks_on_image, resize_image
+from .utils import locate_hand_landmarks, draw_landmarks_on_image, resize_image, save_roi_image
 import subprocess
 import segmentation
 from shapely.geometry import Polygon
@@ -48,6 +49,36 @@ def calculate_iou(rect1, rect2):
     return iou
 
 
+def process_finger(finger_key, landmarks_per_finger, closest_points, landmark_pixels, rgb_mask):
+    finger_roi_points = [item for idx in landmarks_per_finger[finger_key][1:] for item in closest_points[idx]]
+    finger_roi_points.append(landmark_pixels[landmarks_per_finger[finger_key][0]])
+
+    rect = get_bounding_box(rgb_mask, finger_roi_points)
+    roi, rotation_matrix = extract_roi(rgb_mask, rect)
+
+    dip = np.array(landmark_pixels[landmarks_per_finger[finger_key][1]])
+    pip = np.array(landmark_pixels[landmarks_per_finger[finger_key][2]])
+
+    # Rotate the landmarks
+    rotated_pip = transform_point(pip, rotation_matrix)
+    rotated_dip = transform_point(dip, rotation_matrix)
+
+    # Map the landmarks to the resized image
+    new_pip = adjust_for_roi_crop(rotated_pip, rect[0], rect[1])
+    new_dip = adjust_for_roi_crop(rotated_dip, rect[0], rect[1])
+
+    # Compute pixel width of object at the row of new_pip
+    pip_width = find_object_width_at_row(roi, new_pip[1], new_pip[0])
+    
+    # Compute pixel width of object at the row of new_dip
+    dip_width = find_object_width_at_row(roi, new_dip[1], new_dip[0])
+
+    # Compute vertical pixel distance between new_pip and new_dip
+    vertical_distance = abs(new_dip[1] - new_pip[1])
+
+    # Return pip_width, dip_width, and vertical_distance
+    return pip_width, dip_width, vertical_distance
+
 def process_image(PATH, MASKS_OUTPUT_DIR, FINGER_OUTPUT_DIR, NAIL_OUTPUT_DIR):
     image, landmarks = locate_hand_landmarks(PATH, "hand_landmarker.task")
     
@@ -55,7 +86,7 @@ def process_image(PATH, MASKS_OUTPUT_DIR, FINGER_OUTPUT_DIR, NAIL_OUTPUT_DIR):
         print(f"Warning: No landmarks detected for {os.path.basename(PATH)}")
         return [0, 0, 0, 0], [0, 0, 0, 0]
 
-    landmark_pixel_positions = landmarks_to_pixel_coordinates(image, landmarks)
+    landmark_pixels = landmarks_to_pixel_coordinates(image, landmarks)
     enhanced_image = image
     padding = 250
     
@@ -66,55 +97,27 @@ def process_image(PATH, MASKS_OUTPUT_DIR, FINGER_OUTPUT_DIR, NAIL_OUTPUT_DIR):
         return [0, 0, 0, 0], [0, 0, 0, 0]
         
     result = cv2.copyMakeBorder(result, padding, padding, padding, padding, cv2.BORDER_CONSTANT, value=0)
-    landmark_pixel_positions = [(x+padding, y+padding) for x, y in landmark_pixel_positions]
+    landmark_pixels = [(x+padding, y+padding) for x, y in landmark_pixels]
     
     seg_mask = get_segmentation_mask(result)
     OUTPUT_PATH_MASK = os.path.join(MASKS_OUTPUT_DIR, "seg_" + os.path.basename(PATH))
-    # cv2.imwrite(OUTPUT_PATH_MASK, seg_mask)
+    cv2.imwrite(OUTPUT_PATH_MASK, seg_mask)
 
     contour = extract_contour(seg_mask)
-    # contour = reorient_contour(contour)
-
     if contour is None or len(contour.shape) == 1:
         print(f"Warning: The contour is empty. Skipping {os.path.basename(PATH)}.")
         return [0, 0, 0, 0], [0, 0, 0, 0]
 
     rgb_mask = cv2.cvtColor(seg_mask, cv2.COLOR_GRAY2RGB)
-    hull = cv2.convexHull(contour)
-    # cv2.drawContours(rgb_mask, [contour], -1, (0, 255, 0), 1)
-    # cv2.drawContours(rgb_mask, [hull], -1, (0, 0, 255), 1)
-    # cv2.imwrite(os.path.join(MASKS_OUTPUT_DIR, "contour_" + os.path.basename(PATH)), rgb_mask)
-
-
+    closest_points = closest_contour_point(landmark_pixels, contour)
     vertical_distances = []
     pip_widths, dip_widths = [], []
-    lol = ['INDEX', 'MIDDLE', 'RING', 'PINKY']
     for key in ['INDEX', 'MIDDLE', 'RING', 'PINKY']:
         pip_width, dip_width, vertical_distance = process_finger(key, landmarks_per_finger, closest_points, landmark_pixels, rgb_mask)
         pip_widths.append(pip_width)
         dip_widths.append(dip_width)
         vertical_distances.append(vertical_distance)
 
-        # rect, new_pip, new_dip, roi = transform_landmarks(finger, landmarks_per_finger, finger_contour, landmark_pixel_positions, rgb_mask)
-        # pip_width, dip_width, vertical_distance = calculate_widths_and_distance(new_pip, new_dip, roi)
-        # pip_widths.append(pip_width)
-        # dip_widths.append(dip_width)
-        # vertical_distances.append(vertical_distance)
-
-
-        # cv2.imwrite(os.path.join(FINGER_OUTPUT_DIR, finger + "_" + os.path.basename(PATH)), roi)
-        # # Get the neighboring fingers for the current finger
-        # neighbors = finger_neighbors[key]
-
-        # # Transform and check each neighboring finger's landmarks
-        # for neighbor_key in neighbors:
-        #     # Use transform_landmarks for each neighbor finger
-        #     neighbor_rect, _, _, neighbor_roi = transform_landmarks(neighbor_key, landmarks_per_finger, closest_points, landmark_pixels, rgb_mask)
-
-        #     # Check if the neighbor finger's ROI overlaps with the current finger's ROI
-        #     if calculate_iou(rect, neighbor_rect) > 0.5:
-        #         print(f"The ROI of {neighbor_key} finger overlaps with the ROI of {key} finger.")
-
     mean_vertical_distance = np.mean(vertical_distances)
-    cv2.imwrite(os.path.join(MASKS_OUTPUT_DIR, "contour_" + os.path.basename(PATH)), rgb_mask)
+
     return np.array(pip_widths) / mean_vertical_distance, np.array(dip_widths) / mean_vertical_distance

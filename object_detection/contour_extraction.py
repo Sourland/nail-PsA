@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 
+from object_detection.landmarks_constants import *
 def extract_contour(image: np.ndarray) -> np.ndarray:
     # Find contours
     contours, _ = cv2.findContours(image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -15,11 +16,37 @@ def extract_contour(image: np.ndarray) -> np.ndarray:
     # Return the largest contour by area
     return np.squeeze(contours[0])
 
-def closest_contour_point(point, contour):
-    idx = np.argmin(np.linalg.norm(contour - point, axis=1))
-    closest_point = contour[idx]
-    return closest_point
+def closest_contour_point(landmarks, contour):
+    closest_points = []
 
+    for ctr, landmark in enumerate(landmarks):
+        if ctr in [THUMB_TIP, INDEX_FINGER_TIP, MIDDLE_FINGER_TIP, RING_FINGER_TIP, PINKY_TIP]:
+            left_contour = contour[(contour[:, 0] <= landmark[0]) & (contour[:, 1] >= landmark[1])]
+            right_contour = contour[(contour[:, 0] > landmark[0]) & (contour[:, 1] >= landmark[1])]
+        else:
+            left_contour = contour[(contour[:, 0] <= landmark[0])]
+            right_contour = contour[(contour[:, 0] > landmark[0])]
+
+
+        # For empty contours (when landmarks are on extreme left or right), use the entire contour
+        if len(left_contour) == 0:
+            left_contour = contour
+        if len(right_contour) == 0:
+            right_contour = contour
+
+        # Find closest point on the left of the landmark
+        left_distances = np.sqrt(np.sum((left_contour - landmark)**2, axis=1))
+        left_min_index = np.argmin(left_distances)
+        left_closest_point = tuple(left_contour[left_min_index])
+
+        # Find closest point on the right of the landmark
+        right_distances = np.sqrt(np.sum((right_contour - landmark)**2, axis=1))
+        right_min_index = np.argmin(right_distances)
+        right_closest_point = tuple(right_contour[right_min_index])
+
+        closest_points.append((left_closest_point, right_closest_point))
+
+    return closest_points
 def get_left_and_right_contour_points(landmark, contour):
     left_contour = contour[(contour[:, 0] <= landmark[0])]
     right_contour = contour[(contour[:, 0] > landmark[0])]
