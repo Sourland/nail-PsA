@@ -49,7 +49,7 @@ def calculate_iou(rect1, rect2):
     return iou
 
 
-def process_finger(finger_key, landmarks_per_finger, closest_points, landmark_pixels, rgb_mask):
+def process_finger(finger_key, landmarks_per_finger, closest_points, landmark_pixels, rgb_mask, PATH, FINGER_OUTPUT_DIR):
     finger_roi_points = [item for idx in landmarks_per_finger[finger_key][1:] for item in closest_points[idx]]
     finger_roi_points.append(landmark_pixels[landmarks_per_finger[finger_key][0]])
 
@@ -67,6 +67,14 @@ def process_finger(finger_key, landmarks_per_finger, closest_points, landmark_pi
     new_pip = adjust_for_roi_crop(rotated_pip, rect[0], rect[1])
     new_dip = adjust_for_roi_crop(rotated_dip, rect[0], rect[1])
 
+    # Draw the landmarks on the image
+    cv2.circle(roi, tuple(new_pip), 5, (255, 0, 0), -1)
+    cv2.circle(roi, tuple(new_dip), 5, (255, 0, 0), -1)
+
+    # Save the ROI image
+    output_path = os.path.join(FINGER_OUTPUT_DIR, finger_key + "_" + os.path.basename(PATH))
+    save_roi_image(roi, output_path)
+
     # Compute pixel width of object at the row of new_pip
     pip_width = find_object_width_at_row(roi, new_pip[1], new_pip[0])
     
@@ -77,7 +85,7 @@ def process_finger(finger_key, landmarks_per_finger, closest_points, landmark_pi
     vertical_distance = abs(new_dip[1] - new_pip[1])
 
     # Return pip_width, dip_width, and vertical_distance
-    return pip_width, dip_width, vertical_distance
+    return pip_width, dip_width, vertical_distance, rect
 
 def process_image(PATH, MASKS_OUTPUT_DIR, FINGER_OUTPUT_DIR, NAIL_OUTPUT_DIR):
     image, landmarks = locate_hand_landmarks(PATH, "hand_landmarker.task")
@@ -113,10 +121,20 @@ def process_image(PATH, MASKS_OUTPUT_DIR, FINGER_OUTPUT_DIR, NAIL_OUTPUT_DIR):
     vertical_distances = []
     pip_widths, dip_widths = [], []
     for key in ['INDEX', 'MIDDLE', 'RING', 'PINKY']:
-        pip_width, dip_width, vertical_distance = process_finger(key, landmarks_per_finger, closest_points, landmark_pixels, rgb_mask)
+        pip_width, dip_width, vertical_distance, rect = process_finger(key, landmarks_per_finger, closest_points, landmark_pixels, rgb_mask, PATH, FINGER_OUTPUT_DIR)
         pip_widths.append(pip_width)
         dip_widths.append(dip_width)
         vertical_distances.append(vertical_distance)
+
+        # Get the neighboring fingers for the current finger
+        neighbors = finger_neighbors[key]
+
+        # Transform and check each neighboring finger's landmarks
+        for neighbor_key in neighbors:
+            # Use transform_landmarks for each neighbor finger
+            neighbor_rect, neighbor_pip, neighbor_dip, neighbor_roi = transform_landmarks(neighbor_key, landmarks_per_finger, closest_points, landmark_pixels, rgb_mask)
+
+
 
     mean_vertical_distance = np.mean(vertical_distances)
 
