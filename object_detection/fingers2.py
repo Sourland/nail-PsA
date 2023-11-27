@@ -87,6 +87,18 @@ def process_finger(finger_key, landmarks_per_finger, closest_points, landmark_pi
     # Return pip_width, dip_width, and vertical_distance
     return pip_width, dip_width, vertical_distance, rect
 
+
+def is_point_inside_rect(image, point, rect):
+    (center, (width, height), theta) = rect
+    roi, rotation_matrix = extract_roi(image, rect)
+    rotated_point = transform_point(point, rotation_matrix)
+    adjusted_point = adjust_for_roi_crop(rotated_point, rect[0], rect[1])
+
+    # Check if the adjusted point is within the rectangle's boundaries
+    half_width, half_height = width / 2, height / 2
+    return (-half_width <= adjusted_point[0] <= half_width) and (-half_height <= adjusted_point[1] <= half_height)
+
+    
 def process_image(PATH, MASKS_OUTPUT_DIR, FINGER_OUTPUT_DIR, NAIL_OUTPUT_DIR):
     image, landmarks = locate_hand_landmarks(PATH, "hand_landmarker.task")
     
@@ -131,8 +143,35 @@ def process_image(PATH, MASKS_OUTPUT_DIR, FINGER_OUTPUT_DIR, NAIL_OUTPUT_DIR):
 
         # Transform and check each neighboring finger's landmarks
         for neighbor_key in neighbors:
-            # Use transform_landmarks for each neighbor finger
-            neighbor_rect, neighbor_pip, neighbor_dip, neighbor_roi = transform_landmarks(neighbor_key, landmarks_per_finger, closest_points, landmark_pixels, rgb_mask)
+            neighbor_pip = np.array(landmark_pixels[landmarks_per_finger[neighbor_key][1]])
+            neighbor_dip = np.array(landmark_pixels[landmarks_per_finger[neighbor_key][2]])
+            neighbor_tip = np.array(landmark_pixels[landmarks_per_finger[neighbor_key][3]])
+            if is_point_inside_rect(rgb_mask, neighbor_dip, rect) or is_point_inside_rect(rgb_mask, neighbor_pip, rect):
+                # this_pip = np.array(landmark_pixels[landmarks_per_finger[key][1]])
+                # this_dip = np.array(landmark_pixels[landmarks_per_finger[key][2]])
+                # this_tip = np.array(landmark_pixels[landmarks_per_finger[key][3]])
+
+                # # Compute the middle points between the neighboring finger's landmarks and the current finger's landmarks
+                # dip_middle = (neighbor_dip + this_dip) // 2
+                # pip_middle = (neighbor_pip + this_pip) // 2
+                # tip_middle = (neighbor_tip + this_tip) // 2
+
+                # # Fit a straight line to the middle dip, pip and tip points
+                # slope, intercept = np.polyfit([dip_middle[0], pip_middle[0], tip_middle[0]], [dip_middle[1], pip_middle[1], tip_middle[1]], 1)
+                
+                # # Find if this landmarks are left of right of the line
+                # left_or_right_pip = np.sign(slope * this_pip[0] + intercept - this_pip[1])
+                # left_or_right_dip = np.sign(slope * this_dip[0] + intercept - this_dip[1])
+                # left_or_right_tip = np.sign(slope * this_tip[0] + intercept - this_tip[1])
+
+                # left_or_right = left_or_right_pip * left_or_right_dip * left_or_right_tip
+
+                # if left_or_right < 0:
+                #     # The landmarks are on the right of the line, so keep only the right side of the roi
+                #     ...
+                print(f"Warning: Finger {key} is overlapping with finger {neighbor_key} in image {os.path.basename(PATH)}")
+
+                
 
 
 
