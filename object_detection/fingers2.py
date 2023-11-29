@@ -49,6 +49,45 @@ def calculate_iou(rect1, rect2):
     return iou
 
 
+def is_inside_rotated_rect(rotated_point, rect):
+    (center, (width, height), _) = rect
+    x_min = center[0] - width / 2
+    y_min = center[1] - height / 2
+    x_max = center[0] + width / 2
+    y_max = center[1] + height / 2
+
+    return x_min <= rotated_point[0] <= x_max and y_min <= rotated_point[1] <= y_max
+
+
+def get_rotated_image_shape(image_shape, rotation_matrix):
+    """
+    Calculate the shape of an image after rotation.
+
+    :param image_shape: Tuple of the form (height, width) representing the original image shape.
+    :param rotation_matrix: 2x3 rotation matrix obtained from cv2.getRotationMatrix2D.
+    :return: Tuple of the form (new_height, new_width) representing the new image shape.
+    """
+    height, width = image_shape
+    # Corners of the original image
+    corners = np.array([[0, 0], [width, 0], [width, height], [0, height]])
+
+    # Add a column of 1s for affine transformation
+    ones = np.ones(shape=(len(corners), 1))
+    corners_ones = np.hstack([corners, ones])
+
+    # Transform the corners
+    transformed_corners = rotation_matrix.dot(corners_ones.T).T
+
+    # Calculate new bounding box
+    x_coords, y_coords = zip(*transformed_corners[:, :2])
+    min_x, max_x = min(x_coords), max(x_coords)
+    min_y, max_y = min(y_coords), max(y_coords)
+
+    # New dimensions
+    new_width, new_height = int(np.ceil(max_x - min_x)), int(np.ceil(max_y - min_y))
+
+    return new_height, new_width
+
 def process_finger(finger_key, landmarks_per_finger, closest_points, landmark_pixels, rgb_mask, PATH, FINGER_OUTPUT_DIR):
     finger_roi_points = [item for idx in landmarks_per_finger[finger_key][1:] for item in closest_points[idx]]
     finger_roi_points.append(landmark_pixels[landmarks_per_finger[finger_key][0]])
@@ -56,8 +95,8 @@ def process_finger(finger_key, landmarks_per_finger, closest_points, landmark_pi
     rect = get_bounding_box(rgb_mask, finger_roi_points)
     roi, rotation_matrix = extract_roi(rgb_mask, rect)
 
-    dip = np.array(landmark_pixels[landmarks_per_finger[finger_key][1]])
-    pip = np.array(landmark_pixels[landmarks_per_finger[finger_key][2]])
+    pip = np.array(landmark_pixels[landmarks_per_finger[finger_key][1]])
+    dip = np.array(landmark_pixels[landmarks_per_finger[finger_key][2]])
 
     # Rotate the landmarks
     rotated_pip = transform_point(pip, rotation_matrix)
@@ -67,13 +106,9 @@ def process_finger(finger_key, landmarks_per_finger, closest_points, landmark_pi
     new_pip = adjust_for_roi_crop(rotated_pip, rect[0], rect[1])
     new_dip = adjust_for_roi_crop(rotated_dip, rect[0], rect[1])
 
-    # Draw the landmarks on the image
+    # Draw the landmarks on the image, blue for pip, red for dip
     cv2.circle(roi, tuple(new_pip), 5, (255, 0, 0), -1)
-    cv2.circle(roi, tuple(new_dip), 5, (255, 0, 0), -1)
-
-    # # Save the ROI image
-    # output_path = os.path.join(FINGER_OUTPUT_DIR, finger_key + "_" + os.path.basename(PATH))
-    # save_roi_image(roi, output_path)
+    cv2.circle(roi, tuple(new_dip), 5, (0, 0, 255), -1)
 
     # Compute pixel width of object at the row of new_pip
     pip_width = find_object_width_at_row(roi, new_pip[1], new_pip[0])
@@ -84,21 +119,80 @@ def process_finger(finger_key, landmarks_per_finger, closest_points, landmark_pi
     # Compute vertical pixel distance between new_pip and new_dip
     vertical_distance = abs(new_dip[1] - new_pip[1])
 
+
+    neighbors = finger_neighbors[finger_key]
+    for neighbor_key in neighbors:
+        neighbor_pip = np.array(landmark_pixels[landmarks_per_finger[neighbor_key][1]])
+        neighbor_dip = np.array(landmark_pixels[landmarks_per_finger[neighbor_key][2]])
+        
+        # Rotate the landmarks
+        rotated_neighbor_pip = transform_point(neighbor_pip, rotation_matrix)
+        rotated_neighbor_dip = transform_point(neighbor_dip, rotation_matrix)
+
+        if is_inside_rotated_rect(rotated_neighbor_dip, rect) and is_inside_rotated_rect(rotated_neighbor_pip, rect):
+            print(f"Warning: Finger {finger_key} is overlapping with finger {neighbor_key} in image {os.path.basename(PATH)}")
+            
+            # Map the landmarks to the resized image
+            transformed_neighbor_pip = adjust_for_roi_crop(rotated_neighbor_pip, rect[0], rect[1])
+            transformed_neighbor_dip = adjust_for_roi_crop(rotated_neighbor_dip, rect[0], rect[1])
+            
+            # Draw neighbor landmarks on the image, cyan for pip and magenta for dip
+            cv2.circle(roi, tuple(transformed_neighbor_pip), 5, (255, 255, 0), -1)
+            cv2.circle(roi, tuple(transformed_neighbor_dip), 5, (255, 0, 255), -1)
+            # Middle point of pip and dip
+            pip_middle = ((new_pip[0] + transformed_neighbor_pip[0]) / 2, (new_pip[1] + transformed_neighbor_pip[1]) / 2)
+            dip_middle = ((new_dip[0] + transformed_neighbor_dip[0]) / 2, (new_dip[1] + transformed_neighbor_dip[1]) / 2)
+
+            # Transform pip middle and dip middle to have the center of roi as origin
+            pip_middle = (pip_middle[0] - roi.shape[1] / 2, pip_middle[1] - roi.shape[0] / 2)
+            dip_middle = (dip_middle[0] - roi.shape[1] / 2, dip_middle[1] - roi.shape[0] / 2)
+
+            angle = math.degrees(math.atan2(dip_middle[1] - pip_middle[1], dip_middle[0] - pip_middle[0]))
+            angle = 90 + angle  # Adjusting to make the line vertical
+
+            # Calculate the center of roi
+            center = (roi.shape[1] / 2, roi.shape[0] / 2)
+            new_rotation_matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
+            
+            # Calculate size of rotated image
+            new_height, new_width = get_rotated_image_shape(roi.shape[:2], new_rotation_matrix)
+
+            # Pad the image to make sure it doesn't get cropped
+            roi = cv2.copyMakeBorder(roi, 0, np.abs(new_height - roi.shape[0]), 0, 
+                                     np.abs(new_width - roi.shape[1]), cv2.BORDER_CONSTANT, value=0)
+
+            # Rotate the image
+            rotated_roi = cv2.warpAffine(roi, new_rotation_matrix, (new_width, new_height))
+
+            # Rotate the transformed landmarks
+            rotated_pip = transform_point(new_pip, new_rotation_matrix)
+            rotated_dip = transform_point(new_dip, new_rotation_matrix)
+            rotated_neighbor_pip = transform_point(transformed_neighbor_pip, new_rotation_matrix)
+            rotated_neighbor_dip = transform_point(transformed_neighbor_dip, new_rotation_matrix)
+
+            # Calculate new mid points
+            pip_middle = ((rotated_pip[0] + rotated_neighbor_pip[0]) // 2, (rotated_pip[1] + rotated_neighbor_pip[1]) //2)
+            dip_middle = ((rotated_dip[0] + rotated_neighbor_dip[0]) // 2, (rotated_dip[1] + rotated_neighbor_dip[1]) // 2)
+
+
+            # Check if landmarks are on the left or right side of the neighbor
+            left = rotated_neighbor_pip[0] < pip_middle[0]
+            if not left:
+                # Black the image to the right of the middle point
+                rotated_roi[:, int(pip_middle[0]):] = 0
+            else:
+                # Black the image to the left of the middle point
+                rotated_roi[:, :int(pip_middle[0])] = 0
+            
+            # Save rois
+            output_path = os.path.join(FINGER_OUTPUT_DIR, "rotated_" + finger_key + "_" + neighbor_key + "_" + os.path.basename(PATH))
+            save_roi_image(rotated_roi, output_path)
+
+
     # Return pip_width, dip_width, and vertical_distance
-    return pip_width, dip_width, vertical_distance, rect, roi
+    return pip_width, dip_width, vertical_distance
 
 
-def is_point_inside_rect(image, point, rect):
-    (center, (width, height), theta) = rect
-    roi, rotation_matrix = extract_roi(image, rect)
-    rotated_point = transform_point(point, rotation_matrix)
-    adjusted_point = adjust_for_roi_crop(rotated_point, rect[0], rect[1])
-
-    # Check if the adjusted point is within the rectangle's boundaries
-    half_width, half_height = width / 2, height / 2
-    return (-half_width <= adjusted_point[0] <= half_width) and (-half_height <= adjusted_point[1] <= half_height)
-
-    
 def process_image(PATH, MASKS_OUTPUT_DIR, FINGER_OUTPUT_DIR, NAIL_OUTPUT_DIR):
     image, landmarks = locate_hand_landmarks(PATH, "hand_landmarker.task")
     
@@ -136,49 +230,11 @@ def process_image(PATH, MASKS_OUTPUT_DIR, FINGER_OUTPUT_DIR, NAIL_OUTPUT_DIR):
     for key in ['INDEX', 'MIDDLE', 'RING', 'PINKY']:
         if key in used_fingers:
             continue
-        pip_width, dip_width, vertical_distance, rect, roi = process_finger(key, landmarks_per_finger, closest_points, landmark_pixels, rgb_mask, PATH, FINGER_OUTPUT_DIR)
+        pip_width, dip_width, vertical_distance = process_finger(key, landmarks_per_finger, closest_points, landmark_pixels, rgb_mask, PATH, FINGER_OUTPUT_DIR)
         pip_widths.append(pip_width)
         dip_widths.append(dip_width)
         vertical_distances.append(vertical_distance)
 
-        # Get the neighboring fingers for the current finger
-        neighbors = finger_neighbors[key]
-
-        # Transform and check each neighboring finger's landmarks
-        for neighbor_key in neighbors:
-            neighbor_pip = np.array(landmark_pixels[landmarks_per_finger[neighbor_key][1]])
-            neighbor_dip = np.array(landmark_pixels[landmarks_per_finger[neighbor_key][2]])
-            transformed_neighbor_pip = transform_point(neighbor_pip, rect[1])
-            transformed_neighbor_dip = transform_point(neighbor_dip, rect[2])
-            if is_point_inside_rect(rgb_mask, neighbor_dip, rect) or is_point_inside_rect(rgb_mask, neighbor_pip, rect):
-                this_pip = np.array(landmark_pixels[landmarks_per_finger[key][1]])
-                this_dip = np.array(landmark_pixels[landmarks_per_finger[key][2]])
-
-                # Middle point of pip and dip
-                pip_middle = (this_pip + transformed_neighbor_pip) // 2
-                dip_middle = (this_dip + transformed_neighbor_dip) // 2
-
-                # Line slope and intercept
-                slope = (pip_middle[1] - dip_middle[1]) / (pip_middle[0] - dip_middle[0])
-                intercept = pip_middle[1] - slope * pip_middle[0]
-
-                # Check if this pip and dip are left or right of the line defined by slope and intercept
-                pip_left = pip_middle[0] < (slope * pip_middle[1] + intercept)
-                dip_left = dip_middle[0] < (slope * dip_middle[1] + intercept)
-
-                if pip_left and dip_left:
-                    # Make every pixel to the rigth of the roi black
-                    roi[:, int(pip_middle[0]):] = 0
-                    neighbor_roi = roi[:, :int(pip_middle[0])]
-                elif not pip_left and not dip_left:
-                    # Make every pixel to the left of the roi black
-                    roi[:, :int(pip_middle[0])] = 0
-                    neighbor_roi = roi[:, int(pip_middle[0]):]
-
-
-                used_fingers.append(neighbor_key)
-                print(f"Warning: Finger {key} is overlapping with finger {neighbor_key} in image {os.path.basename(PATH)}")
-
-                    mean_vertical_distance = np.mean(vertical_distances)
+    mean_vertical_distance = np.mean(vertical_distances)
 
     return np.array(pip_widths) / mean_vertical_distance, np.array(dip_widths) / mean_vertical_distance
