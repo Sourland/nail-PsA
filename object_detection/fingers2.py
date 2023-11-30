@@ -106,19 +106,16 @@ def process_finger(finger_key, landmarks_per_finger, closest_points, landmark_pi
     new_pip = adjust_for_roi_crop(rotated_pip, rect[0], rect[1])
     new_dip = adjust_for_roi_crop(rotated_dip, rect[0], rect[1])
 
-    # Draw the landmarks on the image, blue for pip, red for dip
-    cv2.circle(roi, tuple(new_pip), 5, (255, 0, 0), -1)
-    cv2.circle(roi, tuple(new_dip), 5, (0, 0, 255), -1)
-
     # Compute pixel width of object at the row of new_pip
     pip_width = find_object_width_at_row(roi, new_pip[1], new_pip[0])
     
     # Compute pixel width of object at the row of new_dip
     dip_width = find_object_width_at_row(roi, new_dip[1], new_dip[0])
 
-    # Compute vertical pixel distance between new_pip and new_dip
     vertical_distance = abs(new_dip[1] - new_pip[1])
-
+    # Draw the landmarks on the image, blue for pip, red for dip
+    cv2.circle(roi, tuple(new_pip), 5, (255, 0, 0), -1)
+    cv2.circle(roi, tuple(new_dip), 5, (0, 0, 255), -1)
 
     neighbors = finger_neighbors[finger_key]
     for neighbor_key in neighbors:
@@ -130,7 +127,6 @@ def process_finger(finger_key, landmarks_per_finger, closest_points, landmark_pi
         rotated_neighbor_dip = transform_point(neighbor_dip, rotation_matrix)
 
         if is_inside_rotated_rect(rotated_neighbor_dip, rect) and is_inside_rotated_rect(rotated_neighbor_pip, rect):
-            print(f"Warning: Finger {finger_key} is overlapping with finger {neighbor_key} in image {os.path.basename(PATH)}")
             
             # Map the landmarks to the resized image
             transformed_neighbor_pip = adjust_for_roi_crop(rotated_neighbor_pip, rect[0], rect[1])
@@ -184,10 +180,17 @@ def process_finger(finger_key, landmarks_per_finger, closest_points, landmark_pi
                 # Black the image to the left of the middle point
                 rotated_roi[:, :int(pip_middle[0])] = 0
             
-            # Save rois
+                # Compute pixel width of object at the row of new_pip
+            pip_width = find_object_width_at_row(rotated_roi, rotated_pip[1], rotated_pip[0])
+            # Compute pixel width of object at the row of new_dip
+            dip_width = find_object_width_at_row(rotated_roi, rotated_dip[1], rotated_dip[0])
+            vertical_distance = abs(new_dip[1] - new_pip[1])
             output_path = os.path.join(FINGER_OUTPUT_DIR, "rotated_" + finger_key + "_" + neighbor_key + "_" + os.path.basename(PATH))
             save_roi_image(rotated_roi, output_path)
 
+
+    # Compute vertical pixel distance between new_pip and new_dip
+    vertical_distance = abs(new_dip[1] - new_pip[1])
 
     # Return pip_width, dip_width, and vertical_distance
     return pip_width, dip_width, vertical_distance
