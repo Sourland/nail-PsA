@@ -19,6 +19,21 @@ from shapely.geometry import Polygon
 from random import randint
 
 def rect_to_polygon(rect):
+    """
+    Converts a rectangle to a polygon by calculating its corner points.
+
+    Args:
+        rect (tuple): A tuple representing the rectangle (center, size, angle).
+
+    Returns:
+        Polygon: A polygon object representing the rectangle.
+
+    Test Case:
+        >>> rect = ((50, 50), (40, 20), 45)
+        >>> polygon = rect_to_polygon(rect)
+        >>> len(polygon.corners)
+        4
+    """
     center, size, theta = rect
     cx, cy = center
     width, height = size
@@ -37,6 +52,22 @@ def rect_to_polygon(rect):
     return Polygon(corners)
 
 def calculate_iou(rect1, rect2):
+    """
+    Calculates the Intersection over Union (IoU) of two rectangles.
+
+    Args:
+        rect1 (tuple): The first rectangle (center, size, angle).
+        rect2 (tuple): The second rectangle (center, size, angle).
+
+    Returns:
+        float: The IoU of the two rectangles.
+
+    Test Case:
+        >>> rect1 = ((50, 50), (40, 20), 0)
+        >>> rect2 = ((60, 50), (40, 20), 0)
+        >>> calculate_iou(rect1, rect2)
+        # Returns the IoU value, a float between 0 and 1.
+    """
     poly1 = rect_to_polygon(rect1)
     poly2 = rect_to_polygon(rect2)
 
@@ -50,6 +81,22 @@ def calculate_iou(rect1, rect2):
 
 
 def is_inside_rotated_rect(rotated_point, rect):
+    """
+    Checks if a point is inside a rotated rectangle.
+
+    Args:
+        rotated_point (tuple): The point to check (x, y).
+        rect (tuple): The rotated rectangle (center, size, angle).
+
+    Returns:
+        bool: True if the point is inside the rectangle, False otherwise.
+
+    Test Case:
+        >>> rotated_point = (55, 55)
+        >>> rect = ((50, 50), (40, 20), 0)
+        >>> is_inside_rotated_rect(rotated_point, rect)
+        True
+    """
     (center, (width, height), _) = rect
     x_min = center[0] - width / 2
     y_min = center[1] - height / 2
@@ -61,11 +108,22 @@ def is_inside_rotated_rect(rotated_point, rect):
 
 def get_rotated_image_shape(image_shape, rotation_matrix):
     """
-    Calculate the shape of an image after rotation.
+    Processes a finger to compute measurements and adjust images.
 
-    :param image_shape: Tuple of the form (height, width) representing the original image shape.
-    :param rotation_matrix: 2x3 rotation matrix obtained from cv2.getRotationMatrix2D.
-    :return: Tuple of the form (new_height, new_width) representing the new image shape.
+    Args:
+        finger_key (str): The key identifying the finger.
+        landmarks_per_finger (dict): A dictionary mapping fingers to their respective landmarks.
+        closest_points (list): A list of closest contour points for each landmark.
+        landmark_pixels (list): Pixel coordinates of the landmarks.
+        rgb_mask (np.ndarray): The RGB mask of the image.
+        PATH (str): The file path of the input image.
+        FINGER_OUTPUT_DIR (str): The directory where output images are saved.
+
+    Returns:
+        None
+
+    Test Case:
+        # Due to the complexity and dependency on external files and data, specific test cases should be created based on the actual scenario.
     """
     height, width = image_shape
     # Corners of the original image
@@ -89,6 +147,24 @@ def get_rotated_image_shape(image_shape, rotation_matrix):
     return new_height, new_width
 
 def process_finger(finger_key, landmarks_per_finger, closest_points, landmark_pixels, rgb_mask, PATH, FINGER_OUTPUT_DIR):
+    """
+    Processes a finger to compute measurements and adjust images.
+
+    Args:
+        finger_key (str): The key identifying the finger.
+        landmarks_per_finger (dict): A dictionary mapping fingers to their respective landmarks.
+        closest_points (list): A list of closest contour points for each landmark.
+        landmark_pixels (list): Pixel coordinates of the landmarks.
+        rgb_mask (np.ndarray): The RGB mask of the image.
+        PATH (str): The file path of the input image.
+        FINGER_OUTPUT_DIR (str): The directory where output images are saved.
+
+    Returns:
+        None
+
+    Test Case:
+        # Due to the complexity and dependency on external files and data, specific test cases should be created based on the actual scenario.
+    """
     finger_roi_points = [item for idx in landmarks_per_finger[finger_key][1:] for item in closest_points[idx]]
     finger_roi_points.append(landmark_pixels[landmarks_per_finger[finger_key][0]])
 
@@ -197,6 +273,21 @@ def process_finger(finger_key, landmarks_per_finger, closest_points, landmark_pi
 
 
 def process_image(PATH, MASKS_OUTPUT_DIR, FINGER_OUTPUT_DIR, NAIL_OUTPUT_DIR):
+    """
+    Processes an image to detect hand landmarks and compute related metrics.
+
+    Args:
+        PATH (str): The file path of the input image.
+        MASKS_OUTPUT_DIR (str): The directory where mask output images are saved.
+        FINGER_OUTPUT_DIR (str): The directory where finger-related output images are saved.
+        NAIL_OUTPUT_DIR (str): The directory where nail-related output images are saved.
+
+    Returns:
+        tuple: Arrays of ratios of pip widths and dip widths to the mean vertical distance.
+
+    Test Case:
+        # Requires specific image files and directory setup for a practical test case.
+    """
     image, landmarks = locate_hand_landmarks(PATH, "hand_landmarker.task")
     
     if not landmarks.hand_landmarks:

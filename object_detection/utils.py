@@ -14,17 +14,24 @@ HANDEDNESS_TEXT_COLOR = (88, 205, 54)  # vibrant green
 
 def resize_image(img: np.ndarray, new_size: int) -> np.ndarray:
     """
-    Resizes the image by resizing the smaller axis to the desired size in order to maintain aspect ratio.
+    Resizes an image by resizing the smaller axis to the desired size while maintaining the aspect ratio.
 
     Args:
-        img: The image to be resized
-        new_size: the new size of the smaller axis
+        img (np.ndarray): The image to be resized.
+        new_size (int): The new size of the smaller axis of the image.
 
     Returns:
-        Resized image
+        np.ndarray: The resized image.
 
     Raises:
         None
+
+    Test Case:
+        >>> img = np.zeros((50, 100, 3), dtype=np.uint8)
+        >>> new_size = 25
+        >>> resized_img = resize_image(img, new_size)
+        >>> resized_img.shape
+        (25, 50, 3)
     """
     scale_percent = new_size / min((img.shape[0], img.shape[1]))
     width = int(img.shape[1] * scale_percent)
@@ -39,14 +46,17 @@ def locate_hand_landmarks(image_path: str, detector_path: str) -> vision.HandLan
     Detects hand landmarks in the input image using the specified HandLandmarker object.
 
     Args:
-        image (np.ndarray): The input image to detect hand landmarks on.
-        detector (vision.HandLandmarker): A HandLandmarker object for detecting landmarks on hands in images.
+        image_path (str): The file path of the input image.
+        detector_path (str): The file path of the HandLandmarker model.
 
     Returns:
         vision.HandLandmarkerResult: The result of the hand landmark detection, which includes the detected landmarks and their confidence scores.
 
     Raises:
         None
+
+    Test Case:
+        # This function requires specific input files and a HandLandmarker object, hence a practical test would involve using actual files.
     """
     base_options = python.BaseOptions(model_asset_path=detector_path)
 
@@ -63,7 +73,7 @@ def locate_hand_landmarks(image_path: str, detector_path: str) -> vision.HandLan
 
 def draw_landmarks_on_image(rgb_image: np.ndarray, detection_result: vision.HandLandmarkerResult) -> np.ndarray:
     """
-    Draws hand landmarks and handedness on an input image.
+    Draws hand landmarks and handedness on an input RGB image.
 
     Args:
         rgb_image (np.ndarray): The input RGB image.
@@ -71,6 +81,12 @@ def draw_landmarks_on_image(rgb_image: np.ndarray, detection_result: vision.Hand
 
     Returns:
         np.ndarray: The annotated image with hand landmarks and handedness visualized.
+
+    Raises:
+        None
+
+    Test Case:
+        # This function requires a specific detection_result object, hence a practical test would involve using an actual detection result.
     """
     hand_landmarks_list = detection_result.hand_landmarks
     handedness_list = detection_result.handedness
@@ -109,6 +125,24 @@ def draw_landmarks_on_image(rgb_image: np.ndarray, detection_result: vision.Hand
 
 
 def draw_landmarks_and_connections(image, landmarks, closest_points):
+    """
+    Draws landmarks as red circles and closest points as blue circles with green lines connecting them.
+
+    Args:
+        image (np.ndarray): The image on which landmarks and connections will be drawn.
+        landmarks (list): A list of landmarks to be drawn on the image.
+        closest_points (list): A list of tuples containing closest points for each landmark.
+
+    Returns:
+        np.ndarray: The image with landmarks and connections drawn.
+
+    Test Case:
+        >>> image = np.zeros((100, 100, 3), dtype=np.uint8)
+        >>> landmarks = [(30, 30), (70, 70)]
+        >>> closest_points = [((25, 25), (35, 35)), ((65, 65), (75, 75))]
+        >>> result_image = draw_landmarks_and_connections(image, landmarks, closest_points)
+        # result_image will have red circles at landmarks, blue circles at closest points, and green lines connecting them
+    """
     # Draw landmarks as red circles
     for landmark in landmarks:
         cv2.circle(image, tuple(map(int, landmark)), 3, (0, 0, 255), -1)
@@ -124,6 +158,16 @@ def draw_landmarks_and_connections(image, landmarks, closest_points):
 
 
 def save_roi_image(roi, path):
+    """
+    Saves the region of interest (ROI) image to the specified path.
+
+    Args:
+        roi (np.ndarray): The ROI image to be saved.
+        path (str): The file path where the image will be saved.
+
+    Returns:
+        None
+    """
     if roi.size > 0 and roi is not None:
         cv2.imwrite(path, roi)
     else:
