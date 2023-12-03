@@ -46,7 +46,7 @@ if __name__ == "__main__":
         csvwriter = csv.writer(csvfile)
         
         # Write header
-        # csvwriter.writerow(["Image", "DIP_Effective_Width_Index", "DIP_Effective_Width_Middle", "DIP_Effective_Width_Ring", "DIP_Effective_Width_Pinky"])
+        csvwriter.writerow(["Image", "DIP_Effective_Width_Index", "DIP_Effective_Width_Middle", "DIP_Effective_Width_Ring", "DIP_Effective_Width_Pinky"])
         
         # Write features
         for image_name, pip_feature, dip_feature in zip(image_names, pip_features, dip_features):
