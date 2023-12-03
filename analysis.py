@@ -1,12 +1,13 @@
+import csv
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
 import numpy as np
-from scipy.stats import bootstrap
+from scipy.stats import bootstrap, shapiro, mannwhitneyu, ks_2samp, levene, ttest_ind
 from sklearn.utils import resample
-# Function to plot histograms together
-# Function to plot histograms together with the same number of bins
+
+
 def compare_histograms(df1, df2, column, label1, label2, output_dir, bins=None):
     plt.figure(figsize=(10, 6))
     
@@ -43,15 +44,98 @@ def calculate_statistics(df, column):
     return [mean, median, mode, range_data, std_dev, Q1, Q3, IQR, outliers.shape[0], skewness, kurt]
 
 # Function to plot the statistics table
-def plot_statistics_table(stats_data, column, output_dir):
+def plot_statistics_table(healthy_stats, swollen_stats, column, output_dir):
     rows = ['Mean', 'Median', 'Mode', 'Range', 'Std Dev', 'Q1', 'Q3', 'IQR', 'Outliers Count', 'Skewness', 'Kurtosis']
     fig, ax = plt.subplots(figsize=(12, 4))
     ax.axis('off')
-    table_data = [['Statistic', 'Value']] + list(zip(rows, stats_data))
-    ax.table(cellText=table_data, cellLoc='center', loc='center', colWidths=[0.25, 0.25])
-    plt.title(f'Statistics for {column}')
-    plt.savefig(os.path.join(output_dir, f'{column}_stats.png'))
+    
+    # Prepare the data for the healthy and swollen statistics
+    table_data = [['Statistic', 'Healthy Value', 'Swollen Value']] + list(zip(rows, healthy_stats, swollen_stats))
+    
+    # Add the table to the plot
+    table = ax.table(cellText=table_data, cellLoc='center', loc='center', colWidths=[0.2, 0.2, 0.2])
+    
+    # Scale the columns to fit the data
+    table.auto_set_column_width(col=list(range(len(table_data[0]))))
+    
+    plt.title(f'Statistics Comparison for {column}')
+    
+    # Save the figure
+    plt.savefig(os.path.join(output_dir, f'{column}_stats_comparison.png'))
     plt.close()
+
+
+def save_statistics_to_csv(healthy_stats, swollen_stats, column, output_dir):
+    # Define the rows for the statistics
+    rows = ['Mean', 'Median', 'Mode', 'Range', 'Std Dev', 'Q1', 'Q3', 'IQR', 'Outliers Count', 'Skewness', 'Kurtosis']
+    
+    # Ensure the output directory exists
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    
+    # Prepare the data for the healthy and swollen statistics
+    table_data = [['Statistic', 'Healthy Value', 'Swollen Value']] + list(zip(rows, healthy_stats, swollen_stats))
+    
+    # Define the filename
+    filename = os.path.join(output_dir, f'{column}_stats_comparison.csv')
+
+    # Write the data to a CSV file
+    with open(filename, 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerows(table_data)
+
+
+def perform_normality_test(df, column):
+    """Perform Shapiro-Wilk Normality Test and return the result."""
+    stat, p_value = shapiro(df[column])
+    return p_value
+
+def perform_mann_whitney_test(df1, df2, column):
+    """Perform Mann-Whitney U Test and return the result."""
+    u_stat, p_value = mannwhitneyu(df1[column], df2[column], alternative='two-sided')
+    return u_stat, p_value
+
+def cliffs_delta(x, y):
+    """Calculate Cliff's Delta as a measure of effect size."""
+    n_x, n_y = len(x), len(y)
+    more = sum(xi > yi for xi in x for yi in y)
+    less = sum(xi < yi for xi in x for yi in y)
+    return (more - less) / (n_x * n_y)
+
+
+def plot_cdf(df1, df2, column, output_dir):
+    """Plot the Cumulative Distribution Function (CDF) for two datasets."""
+    plt.figure(figsize=(10, 6))
+    sns.ecdfplot(df1[column], label='Healthy', color='blue')
+    sns.ecdfplot(df2[column], label='Swollen', color='red')
+    plt.title(f'Cumulative Distribution Function for {column}')
+    plt.xlabel(column)
+    plt.ylabel('CDF')
+    plt.legend()
+    plt.savefig(os.path.join(output_dir, f'{column}_cdf.png'))
+    plt.close()
+
+def perform_ks_test(df1, df2, column):
+    """Perform Kolmogorov-Smirnov Test and return the result."""
+    statistic, p_value = ks_2samp(df1[column], df2[column])
+    return statistic, p_value
+
+def perform_levenes_test(df1, df2, column):
+    """Perform Levene's Test for equality of variances and return the result."""
+    statistic, p_value = levene(df1[column], df2[column])
+    return statistic, p_value
+
+def bootstrap_mean_confidence_interval(df, column, num_bootstrap=1000):
+    """Calculate bootstrap mean confidence intervals."""
+    bootstrapped_means = bootstrap((df[column],), np.mean, n_resamples=num_bootstrap)
+    ci_lower = np.percentile(bootstrapped_means, 2.5)
+    ci_upper = np.percentile(bootstrapped_means, 97.5)
+    return ci_lower, ci_upper
+
+def perform_two_sample_t_test(df1, df2, column):
+    """Perform Independent Two-Sample T-Test and return the result."""
+    t_stat, p_value = ttest_ind(df1[column], df2[column], equal_var=True)  # Use equal_var=False for Welch's T-test
+    return t_stat, p_value
 
 # Ensure the output directory exists
 output_dir = 'results/plots'
@@ -72,34 +156,57 @@ for column in columns_dip:
     compare_histograms(df_dip_healthy, df_dip_swollen, column, 'Healthy', 'Swollen', output_dir)
     healthy_stats = calculate_statistics(df_dip_healthy, column)
     swollen_stats = calculate_statistics(df_dip_swollen, column)
-    plot_statistics_table(healthy_stats, column, output_dir)
-    plot_statistics_table(swollen_stats, column, output_dir)
+
+    t_statistic, t_p_value = perform_two_sample_t_test(df_dip_healthy, df_dip_swollen, column)
+    print(f'Independent Two-Sample T-Test for {column} - Statistic: {t_statistic}, P-Value: {t_p_value}')
+
+    # Perform and output results of Mann-Whitney U Test
+    mwu_statistic, mwu_p_value = perform_mann_whitney_test(df_dip_healthy, df_dip_swollen, column)
+    print(f'Mann-Whitney U Test for {column} - Statistic: {mwu_statistic}, P-Value: {mwu_p_value}')
+
+    # Calculate and output effect size (Cliff's Delta)
+    cliff_delta_value = cliffs_delta(df_dip_healthy[column], df_dip_swollen[column])
+    print(f"Cliff's Delta for {column}: {cliff_delta_value}")
+
+    # Perform and output results of Kolmogorov-Smirnov Test
+    ks_statistic, ks_p_value = perform_ks_test(df_dip_healthy, df_dip_swollen, column)
+    print(f'Kolmogorov-Smirnov Test for {column} - Statistic: {ks_statistic}, P-Value: {ks_p_value}')
+
+    # Plot Cumulative Distribution Function (CDF)
+    plot_cdf(df_dip_healthy, df_dip_swollen, column, output_dir)
+
+    # Save statistics to CSV
+    save_statistics_to_csv(healthy_stats, swollen_stats, column, output_dir)
+
+
 
 # Compare PIP features
 for column in columns_pip:
     compare_histograms(df_pip_healthy, df_pip_swollen, column, 'Healthy', 'Swollen', output_dir)
     healthy_stats = calculate_statistics(df_pip_healthy, column)
     swollen_stats = calculate_statistics(df_pip_swollen, column)
-    plot_statistics_table(healthy_stats, column, output_dir)
-    plot_statistics_table(swollen_stats, column, output_dir)
+
+    t_statistic, t_p_value = perform_two_sample_t_test(df_pip_healthy, df_pip_swollen, column)
+    print(f'Independent Two-Sample T-Test for {column} - Statistic: {t_statistic}, P-Value: {t_p_value}')
+    
+    # Perform and output results of Mann-Whitney U Test
+    mwu_statistic, mwu_p_value = perform_mann_whitney_test(df_pip_healthy, df_pip_swollen, column)
+    print(f'Mann-Whitney U Test for {column} - Statistic: {mwu_statistic}, P-Value: {mwu_p_value}')
+
+    # Calculate and output effect size (Cliff's Delta)
+    cliff_delta_value = cliffs_delta(df_pip_healthy[column], df_pip_swollen[column])
+    print(f"Cliff's Delta for {column}: {cliff_delta_value}")
+
+    # Perform and output results of Kolmogorov-Smirnov Test
+    ks_statistic, ks_p_value = perform_ks_test(df_pip_healthy, df_pip_swollen, column)
+    print(f'Kolmogorov-Smirnov Test for {column} - Statistic: {ks_statistic}, P-Value: {ks_p_value}')
+
+    # Plot Cumulative Distribution Function (CDF)
+    plot_cdf(df_pip_healthy, df_pip_swollen, column, output_dir)
+
+    # Save statistics to CSV
+    save_statistics_to_csv(healthy_stats, swollen_stats, column, output_dir)
 
 
-def calculate_sum_of_columns(df, columns, joint):
-    df[joint] = df[columns].sum(axis=1)
-    return df
 
-# Calculate the sum of columns and then compare histograms
-def compare_sum_of_columns(df1, df2, columns, label1, label2, output_dir, joint):
-    sum1 = calculate_sum_of_columns(df1, columns, joint)
-    sum2 = calculate_sum_of_columns(df2, columns, joint)
-    compare_histograms(sum1, sum2, joint, label1, label2, output_dir)
-    sum_stats1 = calculate_statistics(df1, joint)
-    sum_stats2 = calculate_statistics(df2, joint)
-    plot_statistics_table(sum_stats1, 'Sum of ' + ', '.join(columns), output_dir)
-    plot_statistics_table(sum_stats2, 'Sum of ' + ', '.join(columns), output_dir)
 
-# Compare DIP features sum
-compare_sum_of_columns(df_dip_healthy, df_dip_swollen, columns_dip, 'Healthy', 'Swollen', output_dir, "Sum of DIP features")
-
-# Compare PIP features sum
-compare_sum_of_columns(df_pip_healthy, df_pip_swollen, columns_pip, 'Healthy', 'Swollen', output_dir, "Sum of PIP features")
