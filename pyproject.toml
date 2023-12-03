@@ -27,6 +27,7 @@ scikit-image = "^0.22.0"
 tqdm = "^4.66.1"
 seaborn = "^0.13.0"
 shapely = "^2.0.2"
+imblearn = "^0.0"
 
 [build-system]
 requires = ["poetry-core"]
