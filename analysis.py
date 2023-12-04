@@ -2,7 +2,7 @@ import csv
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import os
+import os, math
 import numpy as np
 from scipy.stats import bootstrap, shapiro, mannwhitneyu, ks_2samp, levene, ttest_ind
 from sklearn.utils import resample
@@ -43,7 +43,7 @@ def calculate_statistics(df, column):
     kurt = df[column].kurt()
     return [mean, median, mode, range_data, std_dev, Q1, Q3, IQR, outliers.shape[0], skewness, kurt]
 
-# Function to plot the statistics table
+
 def plot_statistics_table(healthy_stats, swollen_stats, column, output_dir):
     rows = ['Mean', 'Median', 'Mode', 'Range', 'Std Dev', 'Q1', 'Q3', 'IQR', 'Outliers Count', 'Skewness', 'Kurtosis']
     fig, ax = plt.subplots(figsize=(12, 4))
@@ -65,24 +65,28 @@ def plot_statistics_table(healthy_stats, swollen_stats, column, output_dir):
     plt.close()
 
 
-def save_statistics_to_csv(healthy_stats, swollen_stats, column, output_dir):
-    # Define the rows for the statistics
-    rows = ['Mean', 'Median', 'Mode', 'Range', 'Std Dev', 'Q1', 'Q3', 'IQR', 'Outliers Count', 'Skewness', 'Kurtosis']
-    
+def save_statistics_to_csv(stats_dict, output_filename):
     # Ensure the output directory exists
+    output_dir = os.path.dirname(output_filename)
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
-    
-    # Prepare the data for the healthy and swollen statistics
-    table_data = [['Statistic', 'Healthy Value', 'Swollen Value']] + list(zip(rows, healthy_stats, swollen_stats))
-    
-    # Define the filename
-    filename = os.path.join(output_dir, f'{column}_stats_comparison.csv')
 
     # Write the data to a CSV file
-    with open(filename, 'w', newline='') as csvfile:
+    with open(output_filename, 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerows(table_data)
+        
+        # Prepare the header
+        columns = list(stats_dict.keys())
+        header = ['Statistic'] + [f'{col}_Healthy' for col in columns] + [f'{col}_Swollen' for col in columns]
+        writer.writerow(header)
+
+        # Assuming all columns have the same statistics
+        for i in range(len(stats_dict[next(iter(stats_dict))]['healthy'])):
+            row = []
+            for col in columns:
+                row.append(stats_dict[col]['healthy'][i])
+                row.append(stats_dict[col]['swollen'][i])
+            writer.writerow([stats_names[i]] + row)
 
 
 def perform_normality_test(df, column):
@@ -90,10 +94,12 @@ def perform_normality_test(df, column):
     stat, p_value = shapiro(df[column])
     return p_value
 
+
 def perform_mann_whitney_test(df1, df2, column):
     """Perform Mann-Whitney U Test and return the result."""
     u_stat, p_value = mannwhitneyu(df1[column], df2[column], alternative='two-sided')
     return u_stat, p_value
+
 
 def cliffs_delta(x, y):
     """Calculate Cliff's Delta as a measure of effect size."""
@@ -115,15 +121,18 @@ def plot_cdf(df1, df2, column, output_dir):
     plt.savefig(os.path.join(output_dir, f'{column}_cdf.png'))
     plt.close()
 
+
 def perform_ks_test(df1, df2, column):
     """Perform Kolmogorov-Smirnov Test and return the result."""
     statistic, p_value = ks_2samp(df1[column], df2[column])
     return statistic, p_value
 
+
 def perform_levenes_test(df1, df2, column):
     """Perform Levene's Test for equality of variances and return the result."""
     statistic, p_value = levene(df1[column], df2[column])
     return statistic, p_value
+
 
 def bootstrap_mean_confidence_interval(df, column, num_bootstrap=1000):
     """Calculate bootstrap mean confidence intervals."""
@@ -131,6 +140,7 @@ def bootstrap_mean_confidence_interval(df, column, num_bootstrap=1000):
     ci_lower = np.percentile(bootstrapped_means, 2.5)
     ci_upper = np.percentile(bootstrapped_means, 97.5)
     return ci_lower, ci_upper
+
 
 def perform_two_sample_t_test(df1, df2, column):
     """Perform Independent Two-Sample T-Test and return the result."""
@@ -152,10 +162,18 @@ df_pip_swollen = pd.read_csv('results/features_pip_swollen.csv')
 columns_dip = ["DIP_Effective_Width_Index", "DIP_Effective_Width_Middle", "DIP_Effective_Width_Ring", "DIP_Effective_Width_Pinky"]
 columns_pip = ["PIP_Effective_Width_Index", "PIP_Effective_Width_Middle", "PIP_Effective_Width_Ring", "PIP_Effective_Width_Pinky"]
 
+# Collect DIP and PIP statistics
+dip_stats = {}
+pip_stats = {}
+stats_names = ['Mean', 'Median', 'Mode', 'Range', 'Std Dev', 'Q1', 'Q3', 'IQR', 'Outliers Count', 'Skewness', 'Kurtosis']
+
+
 for column in columns_dip:
     compare_histograms(df_dip_healthy, df_dip_swollen, column, 'Healthy', 'Swollen', output_dir)
     healthy_stats = calculate_statistics(df_dip_healthy, column)
     swollen_stats = calculate_statistics(df_dip_swollen, column)
+    dip_stats[column] = {'healthy': healthy_stats, 'swollen': swollen_stats}
+
 
     t_statistic, t_p_value = perform_two_sample_t_test(df_dip_healthy, df_dip_swollen, column)
     print(f'Independent Two-Sample T-Test for {column} - Statistic: {t_statistic}, P-Value: {t_p_value}')
@@ -172,19 +190,12 @@ for column in columns_dip:
     ks_statistic, ks_p_value = perform_ks_test(df_dip_healthy, df_dip_swollen, column)
     print(f'Kolmogorov-Smirnov Test for {column} - Statistic: {ks_statistic}, P-Value: {ks_p_value}')
 
-    # Plot Cumulative Distribution Function (CDF)
-    plot_cdf(df_dip_healthy, df_dip_swollen, column, output_dir)
-
-    # Save statistics to CSV
-    save_statistics_to_csv(healthy_stats, swollen_stats, column, output_dir)
-
-
-
 # Compare PIP features
 for column in columns_pip:
     compare_histograms(df_pip_healthy, df_pip_swollen, column, 'Healthy', 'Swollen', output_dir)
     healthy_stats = calculate_statistics(df_pip_healthy, column)
     swollen_stats = calculate_statistics(df_pip_swollen, column)
+    pip_stats[column] = {'healthy': healthy_stats, 'swollen': swollen_stats}
 
     t_statistic, t_p_value = perform_two_sample_t_test(df_pip_healthy, df_pip_swollen, column)
     print(f'Independent Two-Sample T-Test for {column} - Statistic: {t_statistic}, P-Value: {t_p_value}')
@@ -201,11 +212,11 @@ for column in columns_pip:
     ks_statistic, ks_p_value = perform_ks_test(df_pip_healthy, df_pip_swollen, column)
     print(f'Kolmogorov-Smirnov Test for {column} - Statistic: {ks_statistic}, P-Value: {ks_p_value}')
 
-    # Plot Cumulative Distribution Function (CDF)
-    plot_cdf(df_pip_healthy, df_pip_swollen, column, output_dir)
+# Save statistics to CSV files
+save_statistics_to_csv(dip_stats, 'results/DIP_stats_comparison.csv')
+save_statistics_to_csv(pip_stats, 'results/PIP_stats_comparison.csv')
 
-    # Save statistics to CSV
-    save_statistics_to_csv(healthy_stats, swollen_stats, column, output_dir)
+
 
 
 
