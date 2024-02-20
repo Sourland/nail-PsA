@@ -16,7 +16,24 @@ from pixel_finder import find_bounding_box, crop_image
 my_session = new_session("u2net_human_seg")
 
 
-def load_and_annotate_image(hand_path, detector_path):
+def load_and_annotate_image(hand_path: str, detector_path: str) -> tuple:
+    """
+    Loads an image from a given path and annotates it with hand landmarks.
+
+    Args:
+        hand_path (str): Path to the hand image file.
+        detector_path (str): Path to the hand landmarker model.
+
+    Returns:
+        tuple: A tuple containing the loaded image and the hand landmarks.
+
+    Test Case:
+        # Assuming 'hand.jpg' and 'hand_landmarker.model' are valid paths.
+        >>> img, landmarks = load_and_annotate_image('hand.jpg', 'hand_landmarker.model')
+        >>> type(img), type(landmarks)
+        (<class 'numpy.ndarray'>, <class 'mediapipe.tasks.python.vision.HandLandmarkerResult'>)
+    """
+
     img = cv2.imread(hand_path, cv2.COLOR_RGBA2RGB)
     detector = load_hand_landmarker(detector_path)
     landmarks = locate_hand_landmarks(hand_path, detector)
@@ -28,7 +45,23 @@ def load_and_annotate_image(hand_path, detector_path):
     return img, landmarks
 
 
-def resize_and_show(image, result_path):
+def resize_and_show(image: np.ndarray, result_path: str) -> np.ndarray:
+    """
+    Resizes an image to a predetermined width or height while maintaining aspect ratio and saves it.
+
+    Args:
+        image (np.ndarray): The image to be resized.
+        result_path (str): Path to save the resized image.
+
+    Returns:
+        np.ndarray: The resized image.
+
+    Test Case:
+        >>> image = np.zeros((100, 200, 3), dtype=np.uint8)
+        >>> resized_img = resize_and_show(image, 'resized.jpg')
+        >>> resized_img.shape
+        (240, 480, 3)  # Shape will vary based on DESIRED_WIDTH and DESIRED_HEIGHT
+    """
     h, w = image.shape[:2]
     if h < w:
         img = cv2.resize(image, (DESIRED_WIDTH, math.floor(h / (w / DESIRED_WIDTH))))
@@ -38,7 +71,25 @@ def resize_and_show(image, result_path):
     return img
 
 
-def remove_bg_and_whiten(image_path):
+def remove_bg_and_whiten(image_path: str) -> np.ndarray:
+    """
+    Removes the background from an image and whitens the non-black pixels.
+
+    Args:
+        image_path (str): Path to the image file.
+
+    Returns:
+        np.ndarray: The image with the background removed and non-black pixels whitened.
+
+    Test Case:
+        # Assuming 'image_with_bg.jpg' is a valid image path.
+        >>> img_without_bg = remove_bg_and_whiten('image_with_bg.jpg')
+        >>> type(img_without_bg)
+        <class 'numpy.ndarray'>
+        >>> img_without_bg.shape[2]
+        3  # The returned image should have 3 channels
+    """
+
     # 1. Open the RGBA image using OpenCV
     img = cv2.imread(image_path, cv2.COLOR_BGR2RGB)  # Read with alpha channel
     # img_ycrcb = cv2.cvtColor(img, cv2.COLOR_RGB2YCrCb)
@@ -57,7 +108,27 @@ def remove_bg_and_whiten(image_path):
     return img_without_bg
 
 
-def segment_image(image, model_path):
+def segment_image(image: np.ndarray, model_path: str) -> np.ndarray:
+    """
+    Segments an image using a specified model.
+
+    Args:
+        image (np.ndarray): The image to be segmented.
+        model_path (str): Path to the segmentation model.
+
+    Returns:
+        np.ndarray: The segmentation mask of the image.
+
+    Test Case:
+        # Assuming 'image.jpg' and 'segmentation_model.tflite' are valid paths.
+        >>> img = cv2.imread('image.jpg')
+        >>> mask = segment_image(img, 'segmentation_model.tflite')
+        >>> type(mask)
+        <class 'numpy.ndarray'>
+        >>> mask.shape
+        (height, width)  # Shape will vary based on the input image size
+    """
+
     base_options = python.BaseOptions(model_asset_path=model_path)
     options = vision.ImageSegmenterOptions(base_options=base_options,
                                            output_confidence_masks=True)
@@ -67,7 +138,25 @@ def segment_image(image, model_path):
     return segmentation_mask
 
 
-def process_mask(segmentation_mask, image_data):
+def process_mask(segmentation_mask: np.ndarray, image_data: np.ndarray) -> tuple:
+    """
+    Processes a segmentation mask to create foreground and background images.
+
+    Args:
+        segmentation_mask (np.ndarray): The segmentation mask.
+        image_data (np.ndarray): The original image data.
+
+    Returns:
+        tuple: A tuple containing the processed image and the thresholded mask.
+
+    Test Case:
+        >>> segmentation_mask = np.random.rand(100, 100)
+        >>> image_data = np.zeros((100, 100, 3), dtype=np.uint8)
+        >>> processed_img, thresholded_mask = process_mask(segmentation_mask, image_data)
+        >>> processed_img.shape, thresholded_mask.shape
+        ((100, 100, 3), (100, 100))
+    """
+
     thresholded_mask = np.where(segmentation_mask > 0.1, 1, 0)
     fg_image = np.zeros(image_data.shape, dtype=np.uint8)
     fg_image[:] = MASK_COLOR
@@ -79,7 +168,23 @@ def process_mask(segmentation_mask, image_data):
     return output_image, thresholded_mask
 
 
-def extract_regions(img, thresholded_mask, landmarks, original_filename, which_hand):
+def extract_regions(img: np.ndarray, thresholded_mask: np.ndarray, landmarks: object, original_filename: str, which_hand: str):
+    """
+    Extracts specific regions from an image based on thresholded mask and landmarks.
+
+    Args:
+        img (np.ndarray): The original image.
+        thresholded_mask (np.ndarray): The thresholded mask of the image.
+        landmarks (object): The landmarks object.
+        original_filename (str): The filename of the original image.
+        which_hand (str): Specifies the hand ('Right' or 'Left').
+
+    Returns:
+        None
+
+    Test Case:
+        # Requires a specific setup with image, mask, landmarks, filename, and hand orientation for a practical test.
+    """
     landmarks = landmarks.hand_landmarks[0]
     for idx, area in enumerate(areas_of_interest):
         top_left, bottom_right = find_bounding_box(thresholded_mask, landmarks, area, which_hand)
@@ -96,7 +201,22 @@ def extract_regions(img, thresholded_mask, landmarks, original_filename, which_h
         cv2.imwrite(os.path.join("../results", result_filename), extracted_image)
 
 
-def preprocess_image(image):
+def preprocess_image(image: np.ndarray) -> np.ndarray:
+    """
+    Applies preprocessing steps to an image including bilateral filtering and histogram equalization.
+
+    Args:
+        image (np.ndarray): The image to be preprocessed.
+
+    Returns:
+        np.ndarray: The preprocessed image.
+
+    Test Case:
+        >>> image = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)
+        >>> preprocessed_img = preprocess_image(image)
+        >>> preprocessed_img.shape
+        (100, 100, 3)
+    """
     image = cv2.bilateralFilter(image, d=9, sigmaColor=75, sigmaSpace=75)
 
     # Histogram Equalization
@@ -112,13 +232,19 @@ def preprocess_image(image):
     return image
 
 
-def save_landmarks(landmarks, save_path):
+def save_landmarks(landmarks: object, save_path: str):
     """
-    Save HandLandmarkResult to a pickle file.
+    Saves HandLandmarkResult to a pickle file.
 
-    Parameters:
-        landmarks: HandLandmarkResult, containing landmark points data
-        save_path: str, path to where the pickle file will be saved
+    Args:
+        landmarks (object): HandLandmarkResult, containing landmark points data.
+        save_path (str): Path to where the pickle file will be saved.
+
+    Returns:
+        None
+
+    Test Case:
+        # Requires a HandLandmarkResult object and a valid save path for a practical test.
     """
     with open(save_path, 'wb') as f:
         pickle.dump(landmarks, f)
