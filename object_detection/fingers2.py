@@ -7,8 +7,8 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 import mediapipe as mp
 from object_detection.contour_extraction import closest_contour_point, create_finger_contour, extract_contour, get_left_and_right_contour_points, reorient_contour
-from object_detection.landmarks import adjust_for_roi_crop, calculate_widths_and_distance, find_object_width_at_row, landmarks_to_pixel_coordinates, transform_landmarks, transform_point
-from object_detection.roi_extraction import extract_roi, get_bounding_box
+from object_detection.landmarks import adjust_for_roi_crop, find_object_width_at_row, landmarks_to_pixel_coordinates, transform_point
+from object_detection.roi_extraction import extract_roi, get_bounding_box_from_points,  get_bounding_box_from_center
 from object_detection.segmentation import get_segmentation_mask
 from .landmarks_constants import *
 from .pixel_finder import landmark_to_pixels
@@ -146,7 +146,7 @@ def get_rotated_image_shape(image_shape, rotation_matrix):
 
     return new_height, new_width
 
-def process_finger(finger_key, landmarks_per_finger, closest_points, landmark_pixels, rgb_mask, PATH, FINGER_OUTPUT_DIR):
+def process_finger(finger_key, landmarks_per_finger, closest_points, landmark_pixels, rgb_mask, image, PATH, FINGER_OUTPUT_DIR, NAIL_OUTPUT_DIR):
     """
     Processes a finger to compute measurements and adjust images.
 
@@ -168,9 +168,8 @@ def process_finger(finger_key, landmarks_per_finger, closest_points, landmark_pi
     finger_roi_points = [item for idx in landmarks_per_finger[finger_key][1:] for item in closest_points[idx]]
     finger_roi_points.append(landmark_pixels[landmarks_per_finger[finger_key][0]])
 
-    rect = get_bounding_box(rgb_mask, finger_roi_points)
+    rect = get_bounding_box_from_points(rgb_mask, finger_roi_points)
     roi, rotation_matrix = extract_roi(rgb_mask, rect)
-
     pip = np.array(landmark_pixels[landmarks_per_finger[finger_key][1]])
     dip = np.array(landmark_pixels[landmarks_per_finger[finger_key][2]])
 
@@ -232,9 +231,9 @@ def process_finger(finger_key, landmarks_per_finger, closest_points, landmark_pi
             # Pad the image to make sure it doesn't get cropped
             roi = cv2.copyMakeBorder(roi, 0, np.abs(new_height - roi.shape[0]), 0, 
                                      np.abs(new_width - roi.shape[1]), cv2.BORDER_CONSTANT, value=0)
-
             # Rotate the image
             rotated_roi = cv2.warpAffine(roi, new_rotation_matrix, (new_width, new_height))
+            rotated_image_roi = cv2.warpAffine(image_roi, new_rotation_matrix, (new_width, new_height))
 
             # Rotate the transformed landmarks
             rotated_pip = transform_point(new_pip, new_rotation_matrix)
@@ -246,7 +245,6 @@ def process_finger(finger_key, landmarks_per_finger, closest_points, landmark_pi
             pip_middle = ((rotated_pip[0] + rotated_neighbor_pip[0]) // 2, (rotated_pip[1] + rotated_neighbor_pip[1]) //2)
             dip_middle = ((rotated_dip[0] + rotated_neighbor_dip[0]) // 2, (rotated_dip[1] + rotated_neighbor_dip[1]) // 2)
 
-
             # Check if landmarks are on the left or right side of the neighbor
             left = rotated_neighbor_pip[0] < pip_middle[0]
             if not left:
@@ -256,14 +254,13 @@ def process_finger(finger_key, landmarks_per_finger, closest_points, landmark_pi
                 # Black the image to the left of the middle point
                 rotated_roi[:, :int(pip_middle[0])] = 0
             
-                # Compute pixel width of object at the row of new_pip
+            # Compute pixel width of object at the row of new_pip
             pip_width = find_object_width_at_row(rotated_roi, rotated_pip[1], rotated_pip[0])
             # Compute pixel width of object at the row of new_dip
             dip_width = find_object_width_at_row(rotated_roi, rotated_dip[1], rotated_dip[0])
             vertical_distance = abs(new_dip[1] - new_pip[1])
             output_path = os.path.join(FINGER_OUTPUT_DIR, "rotated_" + finger_key + "_" + neighbor_key + "_" + os.path.basename(PATH))
             save_roi_image(rotated_roi, output_path)
-
 
     # Compute vertical pixel distance between new_pip and new_dip
     vertical_distance = abs(new_dip[1] - new_pip[1])
@@ -305,6 +302,7 @@ def process_image(PATH, MASKS_OUTPUT_DIR, FINGER_OUTPUT_DIR, NAIL_OUTPUT_DIR):
         return [0, 0, 0, 0], [0, 0, 0, 0]
         
     result = cv2.copyMakeBorder(result, padding, padding, padding, padding, cv2.BORDER_CONSTANT, value=0)
+    image = cv2.copyMakeBorder(image, padding, padding, padding, padding, cv2.BORDER_CONSTANT, value=0)
     landmark_pixels = [(x+padding, y+padding) for x, y in landmark_pixels]
     
     seg_mask = get_segmentation_mask(result)
@@ -318,16 +316,11 @@ def process_image(PATH, MASKS_OUTPUT_DIR, FINGER_OUTPUT_DIR, NAIL_OUTPUT_DIR):
 
     rgb_mask = cv2.cvtColor(seg_mask, cv2.COLOR_GRAY2RGB)
     closest_points = closest_contour_point(landmark_pixels, contour)
-    vertical_distances = []
-    pip_widths, dip_widths = [], []
-    used_fingers = []
+    pip_widths, dip_widths, vertical_distances = [], [], []
     for key in ['INDEX', 'MIDDLE', 'RING', 'PINKY']:
-        if key in used_fingers:
-            continue
-        pip_width, dip_width, vertical_distance = process_finger(key, landmarks_per_finger, closest_points, landmark_pixels, rgb_mask, PATH, FINGER_OUTPUT_DIR)
+        pip_width, dip_width, vertical_distance = process_finger(key, landmarks_per_finger, closest_points, landmark_pixels, rgb_mask, image, PATH, FINGER_OUTPUT_DIR, NAIL_OUTPUT_DIR)
         pip_widths.append(pip_width)
         dip_widths.append(dip_width)
-        vertical_distances.append(vertical_distance)
 
     mean_vertical_distance = np.mean(vertical_distances)
 

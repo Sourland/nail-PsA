@@ -292,6 +292,4 @@ for image_filename in image_filenames:
 
     resize_and_show(output_image, result_path)
 
-    save_landmarks(landmarks, f'../results/Landmarks/landmarks_{image_filename[:5]}.pkl')
-
     extract_regions(image, thresholded_mask, landmarks, image_filename, which_hand)

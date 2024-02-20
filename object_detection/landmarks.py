@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 
-from object_detection.roi_extraction import extract_roi, get_bounding_box
+from object_detection.roi_extraction import extract_roi, get_bounding_box_from_center, get_bounding_box_from_points
 from .pixel_finder import landmark_to_pixels
 from .landmarks_constants import landmarks_per_finger
 
@@ -86,41 +86,6 @@ def adjust_for_roi_crop(point: tuple, roi_center: tuple, roi_size: tuple) -> np.
     return np.array([adjusted_x, adjusted_y])
 
 
-def transform_landmarks(finger_key: str, landmarks_per_finger: dict, closest_points: list, landmark_pixels: list, rgb_mask: np.ndarray) -> tuple:
-    """
-    Transforms finger landmarks for a specified finger based on ROI and rotation matrix.
-
-    Args:
-        finger_key (str): The key identifying the finger.
-        landmarks_per_finger (dict): A dictionary mapping fingers to their respective landmarks.
-        closest_points (list): A list of points close to the finger landmarks.
-        landmark_pixels (list): Pixel coordinates of the landmarks.
-        rgb_mask (np.ndarray): The RGB mask of the image.
-
-    Returns:
-        tuple: A tuple containing the bounding rectangle, new positions of PIP and DIP joints, 
-               and the ROI of the finger.
-    """
-    finger_roi_points = [item for idx in landmarks_per_finger[finger_key][1:] for item in closest_points[idx]]
-    finger_roi_points.append(landmark_pixels[landmarks_per_finger[finger_key][0]])
-
-    rect = get_bounding_box(rgb_mask, finger_roi_points)
-    roi, rotation_matrix = extract_roi(rgb_mask, rect)
-
-    dip = np.array(landmark_pixels[landmarks_per_finger[finger_key][1]])
-    pip = np.array(landmark_pixels[landmarks_per_finger[finger_key][2]])
-
-    # Rotate the landmarks
-    rotated_pip = transform_point(pip, rotation_matrix)
-    rotated_dip = transform_point(dip, rotation_matrix)
-
-    # Map the landmarks to the resized image
-    new_pip = adjust_for_roi_crop(rotated_pip, rect[0], rect[1])
-    new_dip = adjust_for_roi_crop(rotated_dip, rect[0], rect[1])
-
-    return rect, new_pip, new_dip, roi
-
-
 def find_object_width_at_row(image: np.ndarray, row: int, col: int) -> int:
     """
     Computes the width of an object in the image at a specified row.
@@ -145,27 +110,3 @@ def find_object_width_at_row(image: np.ndarray, row: int, col: int) -> int:
     while right < image.shape[1] - 1 and np.all(image[row, right] != [0, 0, 0]):
         right += 1
     return (right - left)
-
-
-def calculate_widths_and_distance(new_pip: tuple, new_dip: tuple, roi: np.ndarray) -> tuple:
-    """
-    Calculates the widths at the PIP and DIP joints and the distance between them in an ROI.
-
-    Args:
-        new_pip (tuple): The (x, y) coordinates of the PIP joint in the ROI.
-        new_dip (tuple): The (x, y) coordinates of the DIP joint in the ROI.
-        roi (np.ndarray): The region of interest in the image.
-
-    Returns:
-        tuple: A tuple containing the widths at the PIP and DIP joints and the vertical distance between them.
-    """
-    # Compute pixel width of object at the row of new_pip
-    pip_width = find_object_width_at_row(roi, new_pip[1], new_pip[0])
-    
-    # Compute pixel width of object at the row of new_dip
-    dip_width = find_object_width_at_row(roi, new_dip[1], new_dip[0])
-
-    # Compute vertical pixel distance between new_pip and new_dip
-    vertical_distance = abs(new_dip[1] - new_pip[1])
-
-    return pip_width, dip_width, vertical_distance
