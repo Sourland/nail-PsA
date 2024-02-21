@@ -39,7 +39,7 @@ def get_largest_contour(image: np.ndarray) -> np.ndarray:
     # Return the largest contour by area
     return np.squeeze(contours[0])
 
-def get_closest_contour_point(landmarks: list, contour: np.ndarray) -> list:
+def closest_contour_point(landmarks: list, contour: np.ndarray) -> list:
     """
     Finds the closest points on a contour to each given landmark.
 
