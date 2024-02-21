@@ -1,5 +1,5 @@
 import random
-from object_detection.finger_width import process_image
+from object_detection.finger_width import process_hand_image
 import os
 from tqdm import tqdm  # import tqdm
 import csv
@@ -25,7 +25,7 @@ if __name__ == "__main__":
     dip_features = []
     for image_name in tqdm(image_names, desc="Processing images"):
         image_path = os.path.join(DIR_PATH, image_name)
-        pip_feature, dip_feature = process_image(image_path, MASK_OUTPUT_DIR, FINGER_OUTPUT_DIR, NAIL_OUTPUT_DIR)
+        pip_feature, dip_feature = process_hand_image(image_path, MASK_OUTPUT_DIR, FINGER_OUTPUT_DIR)
         pip_features.append(pip_feature)
         dip_features.append(dip_feature)
 

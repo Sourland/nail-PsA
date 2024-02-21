@@ -1,9 +1,6 @@
 import cv2
 import numpy as np
-
-from object_detection.roi_extraction import extract_roi, get_bounding_box_from_center, get_bounding_box_from_points
 from .pixel_finder import landmark_to_pixels
-from .landmarks_constants import landmarks_per_finger
 
 
 def landmarks_to_pixel_coordinates(image: np.ndarray, landmarks: object) -> list:
@@ -59,7 +56,7 @@ def transform_point(point: tuple, matrix: np.ndarray) -> tuple:
     return (int(transformed_point[0]), int(transformed_point[1]))
 
 
-def adjust_for_roi_crop(point: tuple, roi_center: tuple, roi_size: tuple) -> np.ndarray:
+def adjust_point_to_roi(point: tuple, roi_center: tuple, roi_size: tuple) -> np.ndarray:
     """
     Adjusts a point's coordinates based on the region of interest (ROI) cropping.
 

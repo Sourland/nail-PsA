@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 
-def get_bounding_box_from_points(image: np.ndarray, points: list[np.ndarray]) -> tuple[np.ndarray, np.ndarray, float]:
+def get_bounding_box_from_points(points: list[np.ndarray]) -> tuple[np.ndarray, np.ndarray, float]:
     """
     Computes the minimum area rotated bounding box for a set of points.
 
@@ -35,27 +35,6 @@ def get_bounding_box_from_points(image: np.ndarray, points: list[np.ndarray]) ->
         theta -= 90  # Adjust the rotation
 
     return (center, (width, height), theta)
-
-
-def get_bounding_box_from_center(center : tuple, box_width : int):
-    """
-    Get a bounding box centered around a point with a specified width.
-
-    Args:
-        center (tuple): Center coordinates (cx, cy) of the bounding box.
-        box_width (int): Width of the bounding box.
-
-    Returns:
-        bbox (tuple): Bounding box coordinates (top-left, bottom-right).
-    """
-    cx, cy = center
-    half_width = box_width // 2
-
-    # Calculate top-left and bottom-right coordinates of the bounding box
-    top_left = (int(cx - half_width), int(cy - half_width))
-    bottom_right = (int(cx + half_width), int(cy + half_width))
-
-    return top_left, bottom_right
 
 
 def extract_roi(image: np.ndarray, rect: tuple) -> tuple[np.ndarray, np.ndarray]:
