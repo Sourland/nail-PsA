@@ -1,5 +1,5 @@
 import random
-from object_detection.fingers2 import process_image
+from object_detection.finger_width import process_image
 import os
 from tqdm import tqdm  # import tqdm
 import csv
