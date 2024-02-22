@@ -11,7 +11,7 @@ from utils import *
 from landmarks_constants import *
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
-from pixel_finder import find_bounding_box, crop_image
+from region_extractor import find_bounding_box, crop_image
 
 my_session = new_session("u2net_human_seg")
 

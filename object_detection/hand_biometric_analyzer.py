@@ -7,8 +7,7 @@ import segmentation.bg
 from object_detection.contour_extraction import closest_contour_point, get_largest_contour
 from object_detection.finger_width import compute_biometrics
 from object_detection.landmarks import landmarks_to_pixel_coordinates
-from object_detection.segmentation import get_segmentation_mask
-from object_detection.utils import locate_hand_landmarks
+from object_detection.utils import locate_hand_landmarks, get_segmentation_mask
 from object_detection.landmarks_constants import landmarks_per_finger
 
 

@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-from .pixel_finder import landmark_to_pixels
+from .region_extractor import landmark_to_pixels
 
 
 def landmarks_to_pixel_coordinates(image: np.ndarray, landmarks: object) -> list:

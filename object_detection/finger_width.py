@@ -6,9 +6,8 @@ import numpy as np
 from object_detection.contour_extraction import get_largest_contour, closest_contour_point
 from object_detection.landmarks import adjust_point_to_roi, find_object_width_at_row, landmarks_to_pixel_coordinates, transform_point
 from object_detection.roi_extraction import extract_roi, get_bounding_box_from_points
-from object_detection.segmentation import get_segmentation_mask
 from .landmarks_constants import *
-from .utils import locate_hand_landmarks, save_roi_image
+from .utils import locate_hand_landmarks, save_roi_image, get_segmentation_mask
 import segmentation
 
 PADDING = 250  # Constant for image padding
