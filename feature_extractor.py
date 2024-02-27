@@ -1,9 +1,11 @@
 import random
+from hand_landmarker import HandLandmarks
 from object_detection.finger_width import process_hand_image
 import os
 from tqdm import tqdm  # import tqdm
 import csv
 from object_detection.hand_biometric_analyzer import HandBiometricAnalyzer
+from segmentation.bg import BackgroundRemover
 if __name__ == "__main__":
     DIR_PATH = "dataset/hands/swolen/"
     MASK_OUTPUT_DIR = "results/SegMasks/"
@@ -24,8 +26,10 @@ if __name__ == "__main__":
     image_names = [img for img in os.listdir(DIR_PATH) if img.endswith(('.jpg', '.jpeg', '.png'))]
     pip_features = []
     dip_features = []
+    segmentor = BackgroundRemover()
+    hand_landmarker = HandLandmarks("hand_landmarker.task")
+    analyzer = HandBiometricAnalyzer(segmentor=segmentor, hand_landmarker=hand_landmarker, masks_output_dir=MASK_OUTPUT_DIR, finger_output_dir=FINGER_OUTPUT_DIR)
 
-    analyzer = HandBiometricAnalyzer(MASK_OUTPUT_DIR, FINGER_OUTPUT_DIR)
     for image_name in tqdm(image_names, desc="Processing images"):
         image_path = os.path.join(DIR_PATH, image_name)
         pip_feature, dip_feature = analyzer.process(image_path)
