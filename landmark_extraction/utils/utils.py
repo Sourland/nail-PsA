@@ -1,4 +1,3 @@
-import os
 import cv2
 import numpy as np
 import mediapipe as mp
@@ -157,18 +156,3 @@ def draw_landmarks_and_connections(image, landmarks, closest_points):
     return image
 
 
-def save_roi_image(roi, path):
-    """
-    Saves the region of interest (ROI) image to the specified path.
-
-    Args:
-        roi (np.ndarray): The ROI image to be saved.
-        path (str): The file path where the image will be saved.
-
-    Returns:
-        None
-    """
-    if roi.size > 0 and roi is not None:
-        cv2.imwrite(path, roi)
-    else:
-        print(f"Warning: The ROI image is empty or None. Skipping save operation for finger {os.path.basename(path)}.")

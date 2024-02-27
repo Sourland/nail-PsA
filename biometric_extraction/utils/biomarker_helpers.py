@@ -1,12 +1,5 @@
-import math
-import os
-
 import cv2
 import numpy as np
-from utils.contours import get_largest_contour, closest_contour_point
-from hand_landmarker import adjust_point_to_roi, find_object_width_at_row, transform_point
-from utils.roi_helpers import extract_roi, get_bounding_box_from_points
-from object_detection.landmarks_constants import *
 
 def is_inside_rotated_rect(rotated_point, rect):
     """

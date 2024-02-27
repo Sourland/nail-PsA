@@ -1,11 +1,8 @@
 import cv2
 import numpy as np
-from ..nail_image_extraction.region_extractor import landmark_to_pixels
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
-from mediapipe import solutions
-from mediapipe.framework.formats import landmark_pb2
 
 class HandLandmarks:
     def __init__(self, hand_landmarker_path: str):
@@ -78,7 +75,7 @@ class HandLandmarks:
                 <class 'tuple'>
             """
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            return [landmark_to_pixels(gray, landmarks.hand_landmarks[0], idx) for idx in
+            return [self.landmark_to_pixels(gray, landmarks.hand_landmarks[0], idx) for idx in
                     range(len(landmarks.hand_landmarks[0]))]
 
         mediapipe_image = mp.Image.create_from_file(image_path)

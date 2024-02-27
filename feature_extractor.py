@@ -1,10 +1,9 @@
 import random
-from hand_landmarker import HandLandmarks
-from object_detection.finger_width import process_hand_image
+from landmark_extraction.hand_landmarker import HandLandmarks
 import os
 from tqdm import tqdm  # import tqdm
 import csv
-from object_detection.hand_biometric_analyzer import HandBiometricAnalyzer
+from biometric_extraction.hand_biometric_analyzer import HandBiometricAnalyzer
 from segmentation.bg import BackgroundRemover
 if __name__ == "__main__":
     DIR_PATH = "dataset/hands/swolen/"

@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-from object_detection.landmarks_constants import *
+from landmark_extraction.utils.landmarks_constants import *
 
 
 def get_largest_contour(image: np.ndarray) -> np.ndarray:

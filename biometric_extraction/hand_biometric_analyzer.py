@@ -4,11 +4,12 @@ import os
 import cv2
 import numpy as np
 from biometric_extraction.utils.contours import closest_contour_point, get_largest_contour
-from biometric_extraction.utils.biomarker_helpers import add_padding, calculate_transformed_image_shape, compute_biometrics, is_inside_rotated_rect
+from biometric_extraction.utils.biomarker_helpers import add_padding, calculate_transformed_image_shape, is_inside_rotated_rect
 from landmark_extraction.utils.landmarks_constants import *
-from utils.roi_helpers import extract_roi, get_bounding_box_from_points
+from biometric_extraction.utils.roi_helpers import extract_roi, get_bounding_box_from_points
 from segmentation.bg import BackgroundRemover
-from landmark_extraction.hand_landmarker import HandLandmarks, adjust_point_to_roi, find_object_width_at_row, transform_point
+from biometric_extraction.utils.transform import transform_point, adjust_point_to_roi, find_object_width_at_row
+from landmark_extraction.hand_landmarker import HandLandmarks
 
 class HandBiometricAnalyzer:
     def __init__(self, segmentor : BackgroundRemover, hand_landmarker : HandLandmarks, masks_output_dir, finger_output_dir):
@@ -54,7 +55,7 @@ class HandBiometricAnalyzer:
         pip_widths, dip_widths, vertical_distances = [], [], []
         
         for finger in ['INDEX', 'MIDDLE', 'RING', 'PINKY']:
-            pip_width, dip_width, vertical_distance = compute_biometrics(finger, landmarks_per_finger, closest_points, landmark_pixels, rgb_mask)
+            pip_width, dip_width, vertical_distance = self.compute_biometrics(finger, landmarks_per_finger, closest_points, landmark_pixels, rgb_mask)
             pip_widths.append(pip_width)
             dip_widths.append(dip_width)
             vertical_distances.append(vertical_distance)
