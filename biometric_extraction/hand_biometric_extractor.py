@@ -1,25 +1,34 @@
 import math
-import os
 
 import cv2
 import numpy as np
-from biometric_extraction.utils.contours import closest_contour_point, get_largest_contour
-from biometric_extraction.utils.biomarker_helpers import add_padding, calculate_transformed_image_shape, is_inside_rotated_rect
-from landmark_extraction.utils.landmarks_constants import *
-from biometric_extraction.utils.roi_helpers import extract_roi, get_bounding_box_from_points
-from segmentation.bg import BackgroundRemover
-from biometric_extraction.utils.transform import transform_point, adjust_point_to_roi, find_object_width_at_row
-from landmark_extraction.hand_landmarker import HandLandmarks
 
-class HandBiometricAnalyzer:
-    def __init__(self, segmentor : BackgroundRemover, hand_landmarker : HandLandmarks, masks_output_dir, finger_output_dir):
+from biometric_extraction.utils.biomarker_helpers import (
+    add_padding, calculate_transformed_image_shape, is_inside_rotated_rect
+)
+from biometric_extraction.utils.contours import (
+    closest_contour_point, get_largest_contour
+)
+from biometric_extraction.utils.roi_helpers import (
+    extract_roi, get_bounding_box_from_points
+)
+from biometric_extraction.utils.transform import (
+    transform_point, adjust_point_to_roi, find_object_width_at_row
+)
+from landmark_extraction.hand_landmarker import HandLandmarks
+from landmark_extraction.utils.landmarks_constants import *
+from segmentation.bg import BackgroundRemover
+
+
+class HandBiometricExtractor:
+    def __init__(self, segmentor : BackgroundRemover, hand_landmarker : HandLandmarks, masks_output_dir=None, finger_output_dir=None):
         self.masks_output_dir = masks_output_dir
         self.finger_output_dir = finger_output_dir
         self.padding = 250
         self.segmentor = segmentor
         self.hand_landmarker = hand_landmarker
 
-    def process(self, path):
+    def process(self, seg_mask, landmarks):
         """
         Processes an image to detect hand landmarks and compute related metrics.
 
@@ -29,25 +38,12 @@ class HandBiometricAnalyzer:
         Returns:
             tuple: Arrays of ratios of pip widths and dip widths to the mean vertical distance.
         """
-
-        landmarks, image = self.hand_landmarker.locate_hand_landmarks(path)
-
-        if not landmarks:
-            print(f"Warning: No landmarks detected for {os.path.basename(path)}")
-            return [0, 0, 0, 0], [0, 0, 0, 0]
-        
-        try:
-            seg_mask = self.segmentor.get_segmentation_mask(image)
-        except ValueError as e:
-            print(f"Caught a value error: {e} on image {os.path.basename(path)}")
-            return [0, 0, 0, 0], [0, 0, 0, 0]
-
         seg_mask, landmark_pixels = add_padding(seg_mask, landmarks)
 
         contour = get_largest_contour(seg_mask)
         
         if contour is None or len(contour.shape) == 1:
-            print(f"Warning: The contour is empty. Skipping {os.path.basename(path)}.")
+            print(f"Warning: The contour is empty.")
             return [0, 0, 0, 0], [0, 0, 0, 0]
         
         rgb_mask = cv2.cvtColor(seg_mask, cv2.COLOR_GRAY2RGB)

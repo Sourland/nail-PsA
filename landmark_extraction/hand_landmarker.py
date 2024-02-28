@@ -80,8 +80,12 @@ class HandLandmarks:
 
         mediapipe_image = mp.Image.create_from_file(image_path)
         landmarks = self.detector.detect(mediapipe_image)
+        self.handedness = landmarks.handedness[0][0].category_name
         if not landmarks.hand_landmarks:
             Warning(f"Warning: No landmarks detected for {image_path}")
             return None
         image = mediapipe_image.numpy_view().astype(np.uint8)
         return landmarks_batch_to_pixel_coords(image, landmarks), image
+
+    def get_handness(self):
+        return self.handedness
