@@ -28,7 +28,6 @@ def nailpsa(image_path):
 
     
 
-    # Your code to process the image goes here
     print(f"Processing image: {image_path}")
 
 if __name__ == "__main__":
