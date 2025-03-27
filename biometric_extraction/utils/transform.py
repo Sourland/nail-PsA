@@ -1,35 +1,4 @@
-import cv2
 import numpy as np
-
-from object_detection.roi_extraction import extract_roi, get_bounding_box_from_center, get_bounding_box_from_points
-from .pixel_finder import landmark_to_pixels
-from .landmarks_constants import landmarks_per_finger
-
-
-def landmarks_to_pixel_coordinates(image: np.ndarray, landmarks: object) -> list:
-    """
-    Converts hand landmarks into pixel coordinates on the given image.
-
-    Args:
-        image (np.ndarray): The image on which the hand landmarks are detected. Should be in BGR format.
-        landmarks (object): An object containing hand landmarks data, typically obtained from a hand tracking model.
-
-    Returns:
-        list: A list of tuples, each representing the (x, y) pixel coordinates of a hand landmark.
-
-    Test Case:
-        Assume `fake_image` is a numpy array representing an image and `fake_landmarks` is a mock object of landmarks.
-        >>> fake_image = np.zeros((100, 100, 3), dtype=np.uint8)
-        >>> fake_landmarks = MockLandmarks()  # a mock landmarks object
-        >>> pixels = landmarks_to_pixel_coordinates(fake_image, fake_landmarks)
-        >>> type(pixels)
-        <class 'list'>
-        >>> type(pixels[0])
-        <class 'tuple'>
-    """
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    return [landmark_to_pixels(gray, landmarks.hand_landmarks[0], idx) for idx in
-            range(len(landmarks.hand_landmarks[0]))]
 
 
 def transform_point(point: tuple, matrix: np.ndarray) -> tuple:
@@ -59,7 +28,7 @@ def transform_point(point: tuple, matrix: np.ndarray) -> tuple:
     return (int(transformed_point[0]), int(transformed_point[1]))
 
 
-def adjust_for_roi_crop(point: tuple, roi_center: tuple, roi_size: tuple) -> np.ndarray:
+def adjust_point_to_roi(point: tuple, roi_center: tuple, roi_size: tuple) -> np.ndarray:
     """
     Adjusts a point's coordinates based on the region of interest (ROI) cropping.
 

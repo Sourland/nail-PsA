@@ -1,8 +1,14 @@
 import random
-from object_detection.fingers2 import process_image
+
+import cv2
+from landmark_extraction.hand_landmarker import HandLandmarks
+from landmark_extraction.utils.landmarks_constants import *
 import os
 from tqdm import tqdm  # import tqdm
 import csv
+from biometric_extraction.hand_biometric_extractor import HandBiometricExtractor
+from segmentation.bg import BackgroundRemover
+from nail_image_extraction.region_extractor import *
 if __name__ == "__main__":
     DIR_PATH = "dataset/hands/swolen/"
     MASK_OUTPUT_DIR = "results/SegMasks/"
@@ -19,13 +25,23 @@ if __name__ == "__main__":
     if not os.path.exists(NAIL_OUTPUT_DIR):
         os.makedirs(NAIL_OUTPUT_DIR)
 
-    # Filter image names and wrap with tqdm for a progress bar
+    
     image_names = [img for img in os.listdir(DIR_PATH) if img.endswith(('.jpg', '.jpeg', '.png'))]
     pip_features = []
     dip_features = []
+    segmentor = BackgroundRemover()
+    hand_landmarker = HandLandmarks("hand_landmarker.task")
+    analyzer = HandBiometricExtractor(segmentor=segmentor, hand_landmarker=hand_landmarker, masks_output_dir=MASK_OUTPUT_DIR, finger_output_dir=FINGER_OUTPUT_DIR)
+
     for image_name in tqdm(image_names, desc="Processing images"):
         image_path = os.path.join(DIR_PATH, image_name)
-        pip_feature, dip_feature = process_image(image_path, MASK_OUTPUT_DIR, FINGER_OUTPUT_DIR, NAIL_OUTPUT_DIR)
+        landmark_result, image = hand_landmarker.locate_hand_landmarks(image_path)
+        seg_mask = segmentor.get_segmentation_mask(image)
+        handness = hand_landmarker.get_handness()
+        top_left, bottom_right = find_bounding_box(image=seg_mask, landmarks=landmark_result, landmark_name=INDEX_FINGER_TIP, which_hand=handness)
+        nail_image = crop_image(image=image, top_left=top_left, bottom_right=bottom_right)
+
+        pip_feature, dip_feature = analyzer.process(seg_mask, landmark_result)
         pip_features.append(pip_feature)
         dip_features.append(dip_feature)
 

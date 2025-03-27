@@ -1,7 +1,8 @@
+import os
 import cv2
 import numpy as np
 
-def get_bounding_box_from_points(image: np.ndarray, points: list[np.ndarray]) -> tuple[np.ndarray, np.ndarray, float]:
+def get_bounding_box_from_points(points: list[np.ndarray]) -> tuple[np.ndarray, np.ndarray, float]:
     """
     Computes the minimum area rotated bounding box for a set of points.
 
@@ -37,27 +38,6 @@ def get_bounding_box_from_points(image: np.ndarray, points: list[np.ndarray]) ->
     return (center, (width, height), theta)
 
 
-def get_bounding_box_from_center(center : tuple, box_width : int):
-    """
-    Get a bounding box centered around a point with a specified width.
-
-    Args:
-        center (tuple): Center coordinates (cx, cy) of the bounding box.
-        box_width (int): Width of the bounding box.
-
-    Returns:
-        bbox (tuple): Bounding box coordinates (top-left, bottom-right).
-    """
-    cx, cy = center
-    half_width = box_width // 2
-
-    # Calculate top-left and bottom-right coordinates of the bounding box
-    top_left = (int(cx - half_width), int(cy - half_width))
-    bottom_right = (int(cx + half_width), int(cy + half_width))
-
-    return top_left, bottom_right
-
-
 def extract_roi(image: np.ndarray, rect: tuple) -> tuple[np.ndarray, np.ndarray]:
     """
     Extracts a region of interest (ROI) from an image based on a given rotated rectangle.
@@ -91,3 +71,20 @@ def extract_roi(image: np.ndarray, rect: tuple) -> tuple[np.ndarray, np.ndarray]
     x, y = int(center[0] - width // 2), int(center[1] - height // 2)
     roi = warped_image[y:y + int(height), x:x + int(width)]
     return roi, rotation_matrix
+
+
+def save_roi_image(roi, path):
+    """
+    Saves the region of interest (ROI) image to the specified path.
+
+    Args:
+        roi (np.ndarray): The ROI image to be saved.
+        path (str): The file path where the image will be saved.
+
+    Returns:
+        None
+    """
+    if roi.size > 0 and roi is not None:
+        cv2.imwrite(path, roi)
+    else:
+        print(f"Warning: The ROI image is empty or None. Skipping save operation for finger {os.path.basename(path)}.")

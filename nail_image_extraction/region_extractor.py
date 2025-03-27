@@ -1,7 +1,6 @@
-import cv2
 import numpy as np
 from mediapipe.tasks.python import vision
-from .landmarks_constants import * 
+from landmark_extraction.utils.landmarks_constants import * 
 
 
 def find_bounding_box(image, landmarks, landmark_name, which_hand):
@@ -27,8 +26,9 @@ def find_bounding_box(image, landmarks, landmark_name, which_hand):
         ((50, 50), (50, 50))
     """
     assert which_hand in ["Right", "Left"]
-    x, y = landmark_to_pixels(image, landmarks, landmark_name)
-    height, width = image.shape
+    x, y = landmarks[landmark_name]
+    height = image.shape[0]
+    width = image.shape[1]
     left = right = 0
 
     if which_hand == "Right":
@@ -39,21 +39,19 @@ def find_bounding_box(image, landmarks, landmark_name, which_hand):
     # Iterate from the landmark's x-coordinate towards the left of the image
     for i in range(x, -1, -1):
         if i < 0 or i >= width or y < 0 or y >= height:
-            # Skip this iteration if index out of bounds
             continue
 
         if image[y, i] == 0:
-            left = np.abs(x - i)  # Return the coordinates of the nearest black pixel
+            left = np.abs(x - i)
             break
 
-    # Iterate from the landmark's x-coordinate towards the right of the image
     for i in range(x, width):
         if i < 0 or i >= width or y < 0 or y >= height:
             # Skip this iteration if index out of bounds
             continue
 
         if image[y, i] == 0:
-            right = np.abs(x - i)  # Return the coordinates of the nearest black pixel
+            right = np.abs(x - i) 
             break
 
 
@@ -88,8 +86,8 @@ def has_overstepped_boundaries(left: int, right: int, landmarks: list[vision.Han
         (10, 10)  # May vary based on actual landmark positions and neighbors
     """
     if isinstance(neighbors, list):
-        landmark_left_x, _ = landmark_to_pixels(image, landmarks, neighbors[0])
-        landmark_right_x, _ = landmark_to_pixels(image, landmarks, neighbors[1])
+        landmark_left_x, _ = landmarks[neighbors[0]]
+        landmark_right_x, _ = landmarks[neighbors[1]]
 
         if (current_landmark - left) < landmark_left_x:
             left = np.abs(current_landmark - landmark_left_x) // 2
@@ -100,31 +98,6 @@ def has_overstepped_boundaries(left: int, right: int, landmarks: list[vision.Han
         return left, right
     else:
         return left, right
-
-
-def landmark_to_pixels(image: np.ndarray, landmarks: dict, landmark_name: str) -> tuple:
-    """
-    Converts a landmark's relative position to pixel coordinates.
-
-    Args:
-        image (np.ndarray): The image containing the hand.
-        landmarks (dict): A dictionary of landmarks.
-        landmark_name (str): The name of the landmark.
-
-    Returns:
-        tuple: The pixel coordinates (X, Y) of the landmark.
-
-    Test Case:
-        >>> image = np.zeros((100, 100), dtype=np.uint8)
-        >>> landmarks = {'index': {'x': 0.5, 'y': 0.5}}
-        >>> landmark_to_pixels(image, landmarks, 'index')
-        (50, 50)
-    """
-
-    (height, width) = image.shape
-    landmark_x = round(width * landmarks[landmark_name].x)  # X coordinate of the Mediapipe landmark # col
-    landmark_y = round(height * landmarks[landmark_name].y)  # Y coordinate of the Mediapipe landmark # row
-    return landmark_x, landmark_y
 
 
 def crop_image(image: np.ndarray, top_left: tuple, bottom_right: tuple) -> np.ndarray:
